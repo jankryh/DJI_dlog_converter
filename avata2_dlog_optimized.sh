@@ -647,40 +647,35 @@ main() {
     FILES=()
     local temp_file_list="/tmp/dji_files_$$.tmp"
     
-    # Build find command for supported extensions
-    local find_args=()
-    find_args+=("$SOURCE_DIR" -type f)
-    find_args+=(\()
+    # Simple approach: find common video file extensions
+    # Default extensions
+    local extensions=("mp4" "MP4" "mov" "MOV")
     
-    # Add file extensions from config (default to mp4/mov if not configured)
-    local first_ext=true
-    if [[ -f "$CONFIG_FILE" ]] || [[ -f "$DEFAULT_CONFIG_FILE" ]]; then
-        # Parse file extensions from config
-        local config_to_use=""
-        [[ -f "$CONFIG_FILE" ]] && config_to_use="$CONFIG_FILE"
-        [[ -f "$DEFAULT_CONFIG_FILE" && -z "$config_to_use" ]] && config_to_use="$DEFAULT_CONFIG_FILE"
-        
-        if [[ -n "$config_to_use" ]]; then
-            while IFS= read -r line; do
-                if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*\"(.+)\"$ ]] || [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^\"[:space:]]+)$ ]]; then
-                    local ext="${BASH_REMATCH[1]}"
-                    [[ "$first_ext" == "false" ]] && find_args+=(-o)
-                    find_args+=(-iname "*.${ext}")
-                    first_ext=false
-                fi
-            done < <(sed -n '/^file_extensions:/,/^[[:alpha:]]/p' "$config_to_use" | tail -n +2 | head -n -1)
-        fi
+    # Parse extensions from config file if available
+    local config_to_use=""
+    [[ -f "$CONFIG_FILE" ]] && config_to_use="$CONFIG_FILE"
+    [[ -f "$DEFAULT_CONFIG_FILE" && -z "$config_to_use" ]] && config_to_use="$DEFAULT_CONFIG_FILE"
+    
+    if [[ -n "$config_to_use" ]] && grep -q "^file_extensions:" "$config_to_use"; then
+        # Extract extensions from config file
+        extensions=()
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*\"(.+)\"$ ]]; then
+                extensions+=("${BASH_REMATCH[1]}")
+            elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^\"[:space:]#]+)$ ]]; then
+                extensions+=("${BASH_REMATCH[1]}")
+            fi
+        done < <(sed -n '/^file_extensions:/,/^[[:alpha:]]/p' "$config_to_use" | tail -n +2)
     fi
     
-    # Default extensions if none found in config
-    if [[ "$first_ext" == "true" ]]; then
-        find_args+=(-iname "*.mp4" -o -iname "*.MP4" -o -iname "*.mov" -o -iname "*.MOV")
-    fi
+    # Build and execute find command
+    > "$temp_file_list"  # Create empty file
+    for ext in "${extensions[@]}"; do
+        find "$SOURCE_DIR" -type f -iname "*.${ext}" 2>/dev/null >> "$temp_file_list"
+    done
     
-    find_args+=(\))
-    
-    # Execute find command
-    "${find_args[@]}" | sort > "$temp_file_list"
+    # Sort the results
+    sort -u "$temp_file_list" -o "$temp_file_list"
     
     # Filter files by size and other criteria
     while IFS= read -r file; do
