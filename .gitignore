@@ -1,0 +1,77 @@
+# Video files
+*.mp4
+*.MP4
+*.mov
+*.MOV
+*.avi
+*.AVI
+*.mkv
+*.MKV
+*.wmv
+*.WMV
+*.flv
+*.FLV
+*.webm
+*.WEBM
+
+# Audio files
+*.mp3
+*.MP3
+*.wav
+*.WAV
+*.aac
+*.AAC
+*.flac
+*.FLAC
+
+# Image files (if generated during processing)
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
+*.png
+*.PNG
+*.tiff
+*.TIFF
+*.bmp
+*.BMP
+
+# Temporary video processing files
+*.tmp
+*.temp
+*_temp.*
+*_tmp.*
+*.log
+
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Final output directory (uncomment if you want to ignore processed videos)
+# final/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# Node modules (if using any Node.js tools)
+node_modules/
+
+# Python cache (if using any Python scripts)
+__pycache__/
+*.pyc
+*.pyo
+
+# FFmpeg logs
+ffmpeg*.log
