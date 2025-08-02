@@ -106,10 +106,10 @@ check_completed_jobs() {
         else
             # Job completed, check exit status
             if wait "$pid"; then
-                log_success "✅ Dokončeno: $(basename "$file")"
+                log_success "✅ Completed: $(basename "$file")"
                 ((PROCESSED_COUNT++))
             else
-                log_error "❌ Chyba: $(basename "$file")"
+                log_error "❌ Error: $(basename "$file")"
                 ((FAILED_COUNT++))
             fi
         fi
@@ -131,7 +131,7 @@ start_parallel_job() {
     local input_file="$1"
     local job_id=$((++JOB_COUNTER))
     
-    log_info "🚀 Spouštím úlohu #$job_id: $(basename "$input_file")"
+    log_info "🚀 Starting job #$job_id: $(basename "$input_file")"
     
     # Start background job
     process_file_parallel "$input_file" "$job_id" &
@@ -147,7 +147,7 @@ show_parallel_status() {
     local running=${#RUNNING_JOBS[@]}
     
     echo -ne "\r\033[K"
-    printf "📊 Stav: %d/%d dokončeno | %d běží | %d úspěšných | %d chyb" \
+    printf "📊 Status: %d/%d completed | %d running | %d successful | %d errors" \
            "$completed" "$total_files" "$running" "$PROCESSED_COUNT" "$FAILED_COUNT"
 }
 
@@ -161,7 +161,7 @@ calculate_eta_and_speed() {
     
     # Show initial message
     if [[ $elapsed -le 5 ]]; then
-        printf " | Spouštění..."
+        printf " | Starting..."
         return
     fi
     
@@ -183,11 +183,11 @@ calculate_eta_and_speed() {
                 local eta_sec=$((eta % 60))
                 printf " | %d.%dx | ETA: %02d:%02d" "$speed_display" "$speed_decimal" "$eta_min" "$eta_sec"
             else
-                printf " | %d.%dx | Výpočet ETA..." "$speed_display" "$speed_decimal"
+                printf " | %d.%dx | Calculating ETA..." "$speed_display" "$speed_decimal"
             fi
         fi
     else
-        printf " | Inicializace..."
+        printf " | Initializing..."
     fi
 }
 
