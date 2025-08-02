@@ -224,7 +224,7 @@ process_file() {
     
     # Skip if already exists
     if [[ -f "$output_file" ]]; then
-        log_info "⏭️ Přeskakuji (již existuje): $basename"
+        log_info "⏭️ Skipping (already exists): $basename"
         return 0
     fi
     
@@ -232,14 +232,14 @@ process_file() {
     local duration
     duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null)
     if [[ -z "$duration" || "$duration" == "N/A" ]]; then
-        log_error "Nelze zjistit délku videa: $basename"
+        log_error "Cannot determine video duration: $basename"
         return 1
     fi
     
     local duration_int
     printf -v duration_int "%.0f" "$duration"
     
-    log_info "🎞️ Zpracovávám: $basename – délka: ${duration_int}s (kvalita: $QUALITY_PRESET)"
+    log_info "🎞️ Processing: $basename – duration: ${duration_int}s (quality: $QUALITY_PRESET)"
     
     local start_time
     start_time=$(date +%s)
@@ -294,12 +294,12 @@ process_file() {
         size=$(du -h "$output_file" | cut -f1)
         
         log_success "Hotovo: $basename"
-        log_info "Velikost: $size | Čas: $(printf "%02d:%02d" "$proc_min" "$proc_sec")"
+        log_info "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")"
     else
         # Error - cleanup temp file
         [[ -f "$temp_file" ]] && rm -f "$temp_file"
         echo ""  # New line after progress bar
-        log_error "Chyba při zpracování: $basename"
+        log_error "Error processing: $basename"
         return 1
     fi
 }
@@ -316,7 +316,7 @@ process_file_parallel() {
     
     # Skip if already exists
     if [[ -f "$output_file" ]]; then
-        echo "⏭️ Přeskakuji (již existuje): $basename" > "$log_file"
+        echo "⏭️ Skipping (already exists): $basename" > "$log_file"
         return 0
     fi
     
@@ -324,14 +324,14 @@ process_file_parallel() {
     local duration
     duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null)
     if [[ -z "$duration" || "$duration" == "N/A" ]]; then
-        echo "❌ Nelze zjistit délku videa: $basename" > "$log_file"
+        echo "❌ Cannot determine video duration: $basename" > "$log_file"
         return 1
     fi
     
     local duration_int
     printf -v duration_int "%.0f" "$duration"
     
-    echo "🎞️ Zpracovávám úloha #$job_id: $basename – délka: ${duration_int}s (kvalita: $QUALITY_PRESET)" > "$log_file"
+    echo "🎞️ Processing job #$job_id: $basename – duration: ${duration_int}s (quality: $QUALITY_PRESET)" > "$log_file"
     
     local start_time
     start_time=$(date +%s)
@@ -365,8 +365,8 @@ process_file_parallel() {
         local size
         size=$(du -h "$output_file" | cut -f1)
         
-        echo "✅ Hotovo úloha #$job_id: $basename" >> "$log_file"
-        echo "Velikost: $size | Čas: $(printf "%02d:%02d" "$proc_min" "$proc_sec")" >> "$log_file"
+        echo "✅ Completed job #$job_id: $basename" >> "$log_file"
+        echo "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")" >> "$log_file"
         
         # Cleanup log file
         rm -f "$log_file"
@@ -374,7 +374,7 @@ process_file_parallel() {
     else
         # Error - cleanup temp file
         [[ -f "$temp_file" ]] && rm -f "$temp_file"
-        echo "❌ Chyba při zpracování úloha #$job_id: $basename" >> "$log_file"
+        echo "❌ Error processing job #$job_id: $basename" >> "$log_file"
         
         # Keep log file for debugging
         return 1
@@ -384,11 +384,11 @@ process_file_parallel() {
 # Main execution
 main() {
     log_info "🚀 DJI Avata 2 D-Log Processor (Optimized) - Parallel Edition"
-    log_info "Zdrojová složka: $SOURCE_DIR"
-    log_info "Výstupní složka: $FINAL_DIR"
-    log_info "LUT soubor: $LUT_FILE"
-    log_info "Kvalita: $QUALITY_PRESET"
-    log_info "Paralelní úlohy: $PARALLEL_JOBS"
+    log_info "Source directory: $SOURCE_DIR"
+    log_info "Output directory: $FINAL_DIR"
+    log_info "LUT file: $LUT_FILE"
+    log_info "Quality: $QUALITY_PRESET"
+    log_info "Parallel jobs: $PARALLEL_JOBS"
     
     check_dependencies
     validate_inputs
@@ -407,11 +407,11 @@ main() {
     local total=${#FILES[@]}
     
     if [[ $total -eq 0 ]]; then
-        log_warning "Žádné MP4 soubory nenalezeny v: $SOURCE_DIR"
+        log_warning "No MP4 files found in: $SOURCE_DIR"
         exit 0
     fi
     
-    log_info "Nalezeno $total souborů k zpracování"
+    log_info "Found $total files to process"
     
     # Initialize parallel processing counters
     PROCESSED_COUNT=0
@@ -424,10 +424,10 @@ main() {
     # Process files with parallel execution
     if [[ $PARALLEL_JOBS -eq 1 ]]; then
         # Sequential processing (original behavior)
-        log_info "🔄 Sekvenční zpracování (1 úloha najednou)"
+        log_info "🔄 Sequential processing (1 job at a time)"
         for i in "${!FILES[@]}"; do
             local input_file="${FILES[$i]}"
-            log_info "📁 Soubor $((i+1))/$total"
+            log_info "📁 File $((i+1))/$total"
             
             if process_file "$input_file"; then
                 ((PROCESSED_COUNT++))
@@ -437,7 +437,7 @@ main() {
         done
     else
         # Parallel processing
-        log_info "🚀 Paralelní zpracování ($PARALLEL_JOBS úloh současně)"
+        log_info "🚀 Parallel processing ($PARALLEL_JOBS jobs simultaneously)"
         
         # Start initial jobs
         for i in "${!FILES[@]}"; do
@@ -452,7 +452,7 @@ main() {
         
         # Wait for all jobs to complete
         echo ""
-        log_info "⏳ Čekám na dokončení všech úloh..."
+        log_info "⏳ Waiting for all jobs to complete..."
         wait_for_all_jobs
         echo ""
     fi
@@ -466,22 +466,22 @@ main() {
     
     # Summary
     echo ""
-    log_success "🏁 Zpracování dokončeno!"
-    log_info "✅ Úspěšně zpracováno: $PROCESSED_COUNT"
-    [[ $FAILED_COUNT -gt 0 ]] && log_warning "❌ Chyby: $FAILED_COUNT"
-    log_info "⏱️  Celkový čas: $(printf "%02d:%02d" "$total_min" "$total_sec")"
+    log_success "🏁 Processing completed!"
+    log_info "✅ Successfully processed: $PROCESSED_COUNT"
+    [[ $FAILED_COUNT -gt 0 ]] && log_warning "❌ Errors: $FAILED_COUNT"
+    log_info "⏱️  Total time: $(printf "%02d:%02d" "$total_min" "$total_sec")"
     
     # Show performance info for parallel processing
     if [[ $PARALLEL_JOBS -gt 1 && $PROCESSED_COUNT -gt 0 ]]; then
         local avg_time_per_file=$((total_processing_time / PROCESSED_COUNT))
         local theoretical_sequential=$((avg_time_per_file * PROCESSED_COUNT))
         local speedup_factor=$((theoretical_sequential * 100 / total_processing_time))
-        log_info "🚀 Zrychlení: ~$((speedup_factor / 100)).$((speedup_factor % 100))x díky paralelizaci"
+        log_info "🚀 Speedup: ~$((speedup_factor / 100)).$((speedup_factor % 100))x thanks to parallelization"
     fi
 }
 
 # Handle interruption gracefully
-trap 'echo ""; log_warning "Zpracování přerušeno uživatelem"; cleanup_jobs; exit 130' INT TERM
+trap 'echo ""; log_warning "Processing interrupted by user"; cleanup_jobs; exit 130' INT TERM
 
 # Show usage if help requested
 if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
