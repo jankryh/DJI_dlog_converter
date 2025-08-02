@@ -6,17 +6,183 @@
 set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
 # Configuration
-SOURCE_DIR="${1:-/Users/onimalu/Movies/DJI/source}"
-FINAL_DIR="${2:-/Users/onimalu/Movies/DJI/final}"
-LUT_FILE="${3:-/Users/onimalu/Movies/DJI/Avata2.cube}"
+# Default configuration file paths
+CONFIG_FILE="${CONFIG_FILE:-./dji-config.yml}"
+DEFAULT_CONFIG_FILE="$HOME/.dji-processor/config.yml"
+
+# Default values (will be overridden by config file and command line)
+SOURCE_DIR="/Users/onimalu/Movies/DJI/source"
+FINAL_DIR="/Users/onimalu/Movies/DJI/final"
+LUT_FILE="/Users/onimalu/Movies/DJI/Avata2.cube"
 BAR_LENGTH=50
-QUALITY_PRESET="${QUALITY_PRESET:-high}"  # high, medium, low
-PARALLEL_JOBS="${PARALLEL_JOBS:-$(sysctl -n hw.ncpu 2>/dev/null || echo "2")}"  # Auto-detect CPU cores, fallback to 2
+QUALITY_PRESET="high"  # high, medium, low
+PARALLEL_JOBS="auto"   # auto, or specific number
+AUTO_BACKUP=false
+BACKUP_DIR="/Users/onimalu/Movies/DJI/backup"
+SKIP_EXISTING=true
+ORGANIZE_BY_DATE=false
+DATE_FORMAT="%Y-%m-%d"
+FORCE_ENCODER="auto"
+CUSTOM_FFMPEG_ARGS=""
+VERBOSE_LOGGING=false
+LOG_FILE=""
+KEEP_JOB_LOGS=false
+MACOS_NOTIFICATIONS=true
+COMPLETION_SOUND=true
+MAX_CPU_USAGE=90
+THERMAL_PROTECTION=true
+MIN_FILE_SIZE=10
+MAX_FILE_SIZE=0
+PRESERVE_TIMESTAMPS=true
+PRESERVE_METADATA=true
+ADD_PROCESSING_METADATA=false
 
 # Parallel processing variables
 declare -a RUNNING_JOBS=()
 declare -a JOB_FILES=()
 JOB_COUNTER=0
+
+# Configuration file parsing
+parse_config_value() {
+    local key="$1"
+    local file="$2"
+    local value
+    
+    # Extract value from YAML-like format, handling quotes and comments
+    value=$(grep "^[[:space:]]*${key}:" "$file" 2>/dev/null | \
+            sed 's/^[[:space:]]*[^:]*:[[:space:]]*//' | \
+            sed 's/[[:space:]]*#.*$//' | \
+            sed 's/^"\(.*\)"$/\1/' | \
+            sed "s/^'\(.*\)'$/\1/" | \
+            head -n1)
+    
+    echo "$value"
+}
+
+parse_config_bool() {
+    local key="$1"
+    local file="$2"
+    local value
+    
+    value=$(parse_config_value "$key" "$file")
+    # Convert to lowercase for bash 3.2 compatibility
+    value=$(echo "$value" | tr '[:upper:]' '[:lower:]')
+    case "$value" in
+        true|yes|1|on) echo "true" ;;
+        false|no|0|off) echo "false" ;;
+        *) echo "false" ;;
+    esac
+}
+
+load_config_file() {
+    local config_file="$1"
+    
+    if [[ ! -f "$config_file" ]]; then
+        return 1
+    fi
+    
+    log_info "📄 Loading configuration from: $config_file"
+    
+    # Parse configuration values
+    local temp_value
+    
+    temp_value=$(parse_config_value "source_directory" "$config_file")
+    [[ -n "$temp_value" ]] && SOURCE_DIR="$temp_value"
+    
+    temp_value=$(parse_config_value "output_directory" "$config_file")
+    [[ -n "$temp_value" ]] && FINAL_DIR="$temp_value"
+    
+    temp_value=$(parse_config_value "lut_file" "$config_file")
+    [[ -n "$temp_value" ]] && LUT_FILE="$temp_value"
+    
+    temp_value=$(parse_config_value "quality_preset" "$config_file")
+    [[ -n "$temp_value" ]] && QUALITY_PRESET="$temp_value"
+    
+    temp_value=$(parse_config_value "parallel_jobs" "$config_file")
+    [[ -n "$temp_value" ]] && PARALLEL_JOBS="$temp_value"
+    
+    temp_value=$(parse_config_bool "auto_backup" "$config_file")
+    AUTO_BACKUP="$temp_value"
+    
+    temp_value=$(parse_config_value "backup_directory" "$config_file")
+    [[ -n "$temp_value" ]] && BACKUP_DIR="$temp_value"
+    
+    temp_value=$(parse_config_bool "skip_existing" "$config_file")
+    SKIP_EXISTING="$temp_value"
+    
+    temp_value=$(parse_config_bool "organize_by_date" "$config_file")
+    ORGANIZE_BY_DATE="$temp_value"
+    
+    temp_value=$(parse_config_value "date_format" "$config_file")
+    [[ -n "$temp_value" ]] && DATE_FORMAT="$temp_value"
+    
+    temp_value=$(parse_config_value "force_encoder" "$config_file")
+    [[ -n "$temp_value" ]] && FORCE_ENCODER="$temp_value"
+    
+    temp_value=$(parse_config_value "custom_ffmpeg_args" "$config_file")
+    [[ -n "$temp_value" ]] && CUSTOM_FFMPEG_ARGS="$temp_value"
+    
+    temp_value=$(parse_config_bool "verbose_logging" "$config_file")
+    VERBOSE_LOGGING="$temp_value"
+    
+    temp_value=$(parse_config_value "log_file" "$config_file")
+    [[ -n "$temp_value" ]] && LOG_FILE="$temp_value"
+    
+    temp_value=$(parse_config_bool "keep_job_logs" "$config_file")
+    KEEP_JOB_LOGS="$temp_value"
+    
+    temp_value=$(parse_config_bool "macos_notifications" "$config_file")
+    MACOS_NOTIFICATIONS="$temp_value"
+    
+    temp_value=$(parse_config_bool "completion_sound" "$config_file")
+    COMPLETION_SOUND="$temp_value"
+    
+    temp_value=$(parse_config_value "max_cpu_usage" "$config_file")
+    [[ -n "$temp_value" ]] && MAX_CPU_USAGE="$temp_value"
+    
+    temp_value=$(parse_config_bool "thermal_protection" "$config_file")
+    THERMAL_PROTECTION="$temp_value"
+    
+    temp_value=$(parse_config_value "min_file_size" "$config_file")
+    [[ -n "$temp_value" ]] && MIN_FILE_SIZE="$temp_value"
+    
+    temp_value=$(parse_config_value "max_file_size" "$config_file")
+    [[ -n "$temp_value" ]] && MAX_FILE_SIZE="$temp_value"
+    
+    temp_value=$(parse_config_bool "preserve_timestamps" "$config_file")
+    PRESERVE_TIMESTAMPS="$temp_value"
+    
+    temp_value=$(parse_config_bool "preserve_metadata" "$config_file")
+    PRESERVE_METADATA="$temp_value"
+    
+    temp_value=$(parse_config_bool "add_processing_metadata" "$config_file")
+    ADD_PROCESSING_METADATA="$temp_value"
+    
+    return 0
+}
+
+apply_config() {
+    # Try to load configuration file
+    if [[ -f "$CONFIG_FILE" ]]; then
+        load_config_file "$CONFIG_FILE"
+    elif [[ -f "$DEFAULT_CONFIG_FILE" ]]; then
+        load_config_file "$DEFAULT_CONFIG_FILE"
+    fi
+    
+    # Handle parallel jobs setting
+    if [[ "$PARALLEL_JOBS" == "auto" || "$PARALLEL_JOBS" == "0" ]]; then
+        PARALLEL_JOBS=$(sysctl -n hw.ncpu 2>/dev/null || echo "2")
+    fi
+    
+    # Apply command line overrides
+    [[ -n "${1:-}" ]] && SOURCE_DIR="$1"
+    [[ -n "${2:-}" ]] && FINAL_DIR="$2"
+    [[ -n "${3:-}" ]] && LUT_FILE="$3"
+    
+    # Apply environment variable overrides
+    QUALITY_PRESET="${QUALITY_PRESET:-$QUALITY_PRESET}"
+    PARALLEL_JOBS="${PARALLEL_JOBS:-$PARALLEL_JOBS}"
+}
 
 # Quality presets (bash 3.2 compatible)
 get_quality_settings() {
@@ -222,10 +388,31 @@ process_file() {
     local output_file="$FINAL_DIR/$basename"
     local temp_file="$output_file.tmp"
     
-    # Skip if already exists
-    if [[ -f "$output_file" ]]; then
+    # Determine output path (with date organization if enabled)
+    local final_output_dir="$FINAL_DIR"
+    if [[ "$ORGANIZE_BY_DATE" == "true" ]]; then
+        local file_date
+        file_date=$(stat -f "%Sm" -t "$DATE_FORMAT" "$input_file" 2>/dev/null || date +"$DATE_FORMAT")
+        final_output_dir="$FINAL_DIR/$file_date"
+        mkdir -p "$final_output_dir"
+    fi
+    
+    output_file="$final_output_dir/$basename"
+    temp_file="$output_file.tmp"
+    
+    # Skip if already exists and skip_existing is enabled
+    if [[ "$SKIP_EXISTING" == "true" && -f "$output_file" ]]; then
         log_info "⏭️ Skipping (already exists): $basename"
         return 0
+    fi
+    
+    # Create backup if enabled
+    if [[ "$AUTO_BACKUP" == "true" ]]; then
+        local backup_path="$BACKUP_DIR/$(basename "$input_file")"
+        if [[ ! -f "$backup_path" ]]; then
+            [[ "$VERBOSE_LOGGING" == "true" ]] && log_info "💾 Creating backup: $backup_path"
+            cp "$input_file" "$backup_path" || log_warning "Failed to create backup for $basename"
+        fi
     fi
     
     # Get duration
@@ -244,14 +431,43 @@ process_file() {
     local start_time
     start_time=$(date +%s)
     
-    # FFmpeg command with error handling
+    # Determine encoder to use
+    local final_encoder="$ENCODER"
+    if [[ "$FORCE_ENCODER" != "auto" ]]; then
+        final_encoder="$FORCE_ENCODER"
+        [[ "$VERBOSE_LOGGING" == "true" ]] && log_info "🔧 Using forced encoder: $final_encoder"
+    fi
+    
+    # Build FFmpeg command with error handling
     local ffmpeg_cmd=(
         ffmpeg -hide_banner -loglevel error -progress pipe:1
         -nostdin
         $HWACCEL -i "$input_file"
         -vf "lut3d='${LUT_FILE}'"
-        -c:v "$ENCODER" $(get_quality_settings "$QUALITY_PRESET")
+        -c:v "$final_encoder" $(get_quality_settings "$QUALITY_PRESET")
         -c:a copy
+    )
+    
+    # Add metadata preservation if enabled
+    if [[ "$PRESERVE_METADATA" == "true" ]]; then
+        ffmpeg_cmd+=(-map_metadata 0)
+    fi
+    
+    # Add custom FFmpeg arguments if specified
+    if [[ -n "$CUSTOM_FFMPEG_ARGS" ]]; then
+        # Split custom args and add to command
+        read -ra custom_args <<< "$CUSTOM_FFMPEG_ARGS"
+        ffmpeg_cmd+=("${custom_args[@]}")
+    fi
+    
+    # Add processing metadata if enabled
+    if [[ "$ADD_PROCESSING_METADATA" == "true" ]]; then
+        ffmpeg_cmd+=(-metadata "processed_by=DJI-Avata2-Processor")
+        ffmpeg_cmd+=(-metadata "processing_date=$(date -Iseconds)")
+        ffmpeg_cmd+=(-metadata "quality_preset=$QUALITY_PRESET")
+    fi
+    
+    ffmpeg_cmd+=(
         -f mp4  # Explicitly specify MP4 format for .tmp files
         -movflags +faststart  # Optimize for streaming
         -y "$temp_file"
@@ -292,6 +508,11 @@ process_file() {
         # Show file size info
         local size
         size=$(du -h "$output_file" | cut -f1)
+        
+        # Preserve timestamps if enabled
+        if [[ "$PRESERVE_TIMESTAMPS" == "true" ]]; then
+            touch -r "$input_file" "$output_file"
+        fi
         
         log_success "Completed: $basename"
         log_info "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")"
@@ -368,8 +589,15 @@ process_file_parallel() {
         echo "✅ Completed job #$job_id: $basename" >> "$log_file"
         echo "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")" >> "$log_file"
         
-        # Cleanup log file
-        rm -f "$log_file"
+        # Preserve timestamps if enabled
+        if [[ "$PRESERVE_TIMESTAMPS" == "true" ]]; then
+            touch -r "$input_file" "$output_file"
+        fi
+        
+        # Cleanup log file based on configuration
+        if [[ "$KEEP_JOB_LOGS" != "true" ]]; then
+            rm -f "$log_file"
+        fi
         return 0
     else
         # Error - cleanup temp file
@@ -383,6 +611,9 @@ process_file_parallel() {
 
 # Main execution
 main() {
+    # Apply configuration first
+    apply_config "$@"
+    
     log_info "🚀 DJI Avata 2 D-Log Processor (Optimized) - Parallel Edition"
     log_info "Source directory: $SOURCE_DIR"
     log_info "Output directory: $FINAL_DIR"
@@ -390,16 +621,90 @@ main() {
     log_info "Quality: $QUALITY_PRESET"
     log_info "Parallel jobs: $PARALLEL_JOBS"
     
+    # Show additional configuration if verbose
+    if [[ "$VERBOSE_LOGGING" == "true" ]]; then
+        log_info "🔧 Configuration details:"
+        log_info "   Auto backup: $AUTO_BACKUP"
+        log_info "   Skip existing: $SKIP_EXISTING"
+        log_info "   Organize by date: $ORGANIZE_BY_DATE"
+        log_info "   Preserve metadata: $PRESERVE_METADATA"
+        log_info "   Min file size: ${MIN_FILE_SIZE}MB"
+        [[ "$MAX_FILE_SIZE" -gt 0 ]] && log_info "   Max file size: ${MAX_FILE_SIZE}GB"
+    fi
+    
     check_dependencies
     validate_inputs
     
     mkdir -p "$FINAL_DIR"
     
-    # Find all MP4 files (bash 3.2 compatible)
+    # Create backup directory if needed
+    if [[ "$AUTO_BACKUP" == "true" ]]; then
+        mkdir -p "$BACKUP_DIR"
+        log_info "💾 Auto backup enabled: $BACKUP_DIR"
+    fi
+    
+    # Find video files based on configuration
     FILES=()
     local temp_file_list="/tmp/dji_files_$$.tmp"
-    find "$SOURCE_DIR" -type f \( -iname "*.mp4" -o -iname "*.MP4" -o -iname "*.Mp4" -o -iname "*.mP4" \) | sort > "$temp_file_list"
+    
+    # Build find command for supported extensions
+    local find_args=()
+    find_args+=("$SOURCE_DIR" -type f)
+    find_args+=(\()
+    
+    # Add file extensions from config (default to mp4/mov if not configured)
+    local first_ext=true
+    if [[ -f "$CONFIG_FILE" ]] || [[ -f "$DEFAULT_CONFIG_FILE" ]]; then
+        # Parse file extensions from config
+        local config_to_use=""
+        [[ -f "$CONFIG_FILE" ]] && config_to_use="$CONFIG_FILE"
+        [[ -f "$DEFAULT_CONFIG_FILE" && -z "$config_to_use" ]] && config_to_use="$DEFAULT_CONFIG_FILE"
+        
+        if [[ -n "$config_to_use" ]]; then
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*\"(.+)\"$ ]] || [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^\"[:space:]]+)$ ]]; then
+                    local ext="${BASH_REMATCH[1]}"
+                    [[ "$first_ext" == "false" ]] && find_args+=(-o)
+                    find_args+=(-iname "*.${ext}")
+                    first_ext=false
+                fi
+            done < <(sed -n '/^file_extensions:/,/^[[:alpha:]]/p' "$config_to_use" | tail -n +2 | head -n -1)
+        fi
+    fi
+    
+    # Default extensions if none found in config
+    if [[ "$first_ext" == "true" ]]; then
+        find_args+=(-iname "*.mp4" -o -iname "*.MP4" -o -iname "*.mov" -o -iname "*.MOV")
+    fi
+    
+    find_args+=(\))
+    
+    # Execute find command
+    "${find_args[@]}" | sort > "$temp_file_list"
+    
+    # Filter files by size and other criteria
     while IFS= read -r file; do
+        [[ -z "$file" ]] && continue
+        
+        # Check file size constraints
+        local file_size_mb
+        file_size_mb=$(du -m "$file" 2>/dev/null | cut -f1)
+        
+        # Skip files that are too small
+        if [[ ${file_size_mb:-0} -lt $MIN_FILE_SIZE ]]; then
+            [[ "$VERBOSE_LOGGING" == "true" ]] && log_info "⏭️ Skipping (too small: ${file_size_mb}MB): $(basename "$file")"
+            continue
+        fi
+        
+        # Skip files that are too large
+        if [[ $MAX_FILE_SIZE -gt 0 ]]; then
+            local file_size_gb=$((file_size_mb / 1024))
+            if [[ $file_size_gb -gt $MAX_FILE_SIZE ]]; then
+                [[ "$VERBOSE_LOGGING" == "true" ]] && log_info "⏭️ Skipping (too large: ${file_size_gb}GB): $(basename "$file")"
+                continue
+            fi
+        fi
+        
         FILES[${#FILES[@]}]="$file"
     done < "$temp_file_list"
     rm -f "$temp_file_list"
@@ -478,6 +783,18 @@ main() {
         local speedup_factor=$((theoretical_sequential * 100 / total_processing_time))
         log_info "🚀 Speedup: ~$((speedup_factor / 100)).$((speedup_factor % 100))x thanks to parallelization"
     fi
+    
+    # Send notifications if enabled
+    if [[ "$MACOS_NOTIFICATIONS" == "true" ]]; then
+        local message="Processing completed! $PROCESSED_COUNT files processed"
+        [[ $FAILED_COUNT -gt 0 ]] && message="$message, $FAILED_COUNT errors"
+        osascript -e "display notification \"$message\" with title \"DJI Video Processor\"" 2>/dev/null || true
+    fi
+    
+    # Play completion sound if enabled
+    if [[ "$COMPLETION_SOUND" == "true" ]]; then
+        afplay /System/Library/Sounds/Glass.aiff 2>/dev/null || true
+    fi
 }
 
 # Handle interruption gracefully
@@ -488,24 +805,49 @@ if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
     cat << EOF
 Usage: $0 [SOURCE_DIRECTORY] [OUTPUT_DIRECTORY] [LUT_FILE]
 
-DJI Avata 2 D-Log to Rec.709 Video Processor with parallel processing
+DJI Avata 2 D-Log to Rec.709 Video Processor with parallel processing and configuration support
+
+Configuration Files:
+  $0 looks for configuration in the following order:
+  1. ./dji-config.yml (current directory)
+  2. ~/.dji-processor/config.yml (user home directory)
+  
+  Environment variables:
+    CONFIG_FILE      Path to custom configuration file
+
+  Command line arguments override configuration file settings.
 
 Environment variables:
   QUALITY_PRESET   Quality: high, medium, low (default: high)
   PARALLEL_JOBS    Number of parallel jobs (default: auto-detect CPU cores)
 
 Examples:
-  $0                                    # Use default paths, auto-detect cores
-  QUALITY_PRESET=medium $0              # Medium quality
+  $0                                    # Use config file + defaults
+  QUALITY_PRESET=medium $0              # Override quality from config
   PARALLEL_JOBS=4 $0                    # 4 parallel jobs
   PARALLEL_JOBS=1 $0                    # Sequential processing
-  $0 /path/to/source /path/to/output    # Custom paths
+  $0 /path/to/source /path/to/output    # Override paths from config
+  CONFIG_FILE=./my-config.yml $0        # Use custom config file
+
+Configuration Features:
+  - Auto backup of original files
+  - File organization by date
+  - Metadata preservation
+  - File size filtering
+  - Custom FFmpeg arguments
+  - macOS notifications
+  - Verbose logging
+  - And much more...
+
+Create Config File:
+  Copy dji-config.yml to ~/.dji-processor/config.yml and customize your settings.
 
 Notes:
   - Parallel processing speeds up conversion of multiple files
   - Each job uses all available CPU cores
   - For 1 file use PARALLEL_JOBS=1
   - For multiple files we recommend 2-4 parallel jobs
+  - Configuration files use YAML format
 EOF
     exit 0
 fi

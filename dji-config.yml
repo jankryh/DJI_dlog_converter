@@ -1,0 +1,103 @@
+# DJI Avata 2 D-Log Video Processor Configuration
+# This configuration file allows you to set default values for the processor
+# Command line arguments will override these settings
+
+# === PATHS ===
+# Source directory containing your D-Log video files
+source_directory: "/Users/onimalu/Movies/DJI/source"
+
+# Output directory for processed videos
+output_directory: "/Users/onimalu/Movies/DJI/final"
+
+# Path to your LUT file (.cube format)
+lut_file: "/Users/onimalu/Movies/DJI/Avata2.cube"
+
+# === PROCESSING SETTINGS ===
+# Video quality preset: high, medium, low
+# high   = 15Mbps (best quality, larger files)
+# medium = 10Mbps (balanced quality/size)
+# low    = 6Mbps  (smaller files, web sharing)
+quality_preset: "high"
+
+# Number of parallel jobs for batch processing
+# 0 or "auto" = auto-detect CPU cores
+# 1 = sequential processing (one file at a time)
+# 2-8 = specific number of parallel jobs
+parallel_jobs: "auto"
+
+# === ADVANCED SETTINGS ===
+# Automatically create backup of original files
+auto_backup: false
+
+# Backup directory (only used if auto_backup is true)
+backup_directory: "/Users/onimalu/Movies/DJI/backup"
+
+# Skip files that already exist in output directory
+skip_existing: true
+
+# Create subdirectories in output based on date
+organize_by_date: false
+
+# Date format for organization (if organize_by_date is true)
+# %Y-%m-%d = 2025-01-15
+# %Y/%m = 2025/01
+date_format: "%Y-%m-%d"
+
+# === ENCODING OPTIONS ===
+# Force specific encoder (leave empty for auto-detection)
+# Options: h264_videotoolbox, libx264, auto
+force_encoder: "auto"
+
+# Additional FFmpeg arguments (advanced users only)
+# Example: "-preset fast -tune film"
+custom_ffmpeg_args: ""
+
+# === LOGGING & MONITORING ===
+# Enable detailed logging
+verbose_logging: false
+
+# Log file path (leave empty to disable file logging)
+log_file: ""
+
+# Keep temporary job logs for debugging
+keep_job_logs: false
+
+# === NOTIFICATIONS ===
+# Send macOS notification when processing completes
+macos_notifications: true
+
+# Play sound when processing completes
+completion_sound: true
+
+# === PERFORMANCE ===
+# Maximum CPU usage percentage (1-100)
+# Lower values reduce system impact but slow processing
+max_cpu_usage: 90
+
+# Pause processing if system temperature is high
+thermal_protection: true
+
+# === FILE HANDLING ===
+# File extensions to process (case insensitive)
+file_extensions:
+  - "mp4"
+  - "MP4"
+  - "mov"
+  - "MOV"
+
+# Minimum file size to process (in MB)
+# Helps skip corrupted or test files
+min_file_size: 10
+
+# Maximum file size to process (in GB, 0 = no limit)
+max_file_size: 0
+
+# === METADATA ===
+# Preserve original file timestamps
+preserve_timestamps: true
+
+# Copy metadata from source to output
+preserve_metadata: true
+
+# Add processing information to metadata
+add_processing_metadata: false

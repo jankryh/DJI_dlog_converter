@@ -1,0 +1,26 @@
+# Basic DJI Avata 2 Video Processor Configuration
+# Copy this to ~/.dji-processor/config.yml or ./dji-config.yml
+
+# === ESSENTIAL SETTINGS ===
+source_directory: "/Users/username/Movies/DJI/source"
+output_directory: "/Users/username/Movies/DJI/final"
+lut_file: "/Users/username/Movies/DJI/Avata2.cube"
+
+# Video quality: high, medium, low
+quality_preset: "high"
+
+# Parallel jobs: auto, or number (1-8)
+parallel_jobs: "auto"
+
+# === BASIC FEATURES ===
+# Skip files that already exist
+skip_existing: true
+
+# Preserve original file timestamps
+preserve_timestamps: true
+
+# Send notification when done
+macos_notifications: true
+
+# Play sound when complete
+completion_sound: true
