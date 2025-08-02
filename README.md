@@ -4,6 +4,8 @@
 
 Convert your DJI Avata 2 D-Log videos to Rec.709 color space using hardware acceleration, parallel processing, and custom LUT files. Features real-time progress tracking, ETA calculation, and multiple quality presets with intelligent multi-core utilization.
 
+🌍 **Fully internationalized** - All interface messages in English for global accessibility
+
 ## ✨ Features
 
 - 🎬 **Batch Processing** - Process multiple videos automatically
@@ -16,6 +18,7 @@ Convert your DJI Avata 2 D-Log videos to Rec.709 color space using hardware acce
 - 🎨 **Color Output** - Beautiful colored terminal output
 - 🔄 **Resume Support** - Skips already processed files
 - 🧠 **Smart Job Management** - Intelligent queue management and resource allocation
+- 🌍 **Internationalized** - Clean English interface for global users
 - 📱 **macOS Optimized** - Built for macOS with bash 3.2 compatibility
 
 ## 🎯 Sample Output
@@ -23,49 +26,49 @@ Convert your DJI Avata 2 D-Log videos to Rec.709 color space using hardware acce
 ### Sequential Mode (PARALLEL_JOBS=1)
 ```bash
 ℹ️  🚀 DJI Avata 2 D-Log Processor (Optimized) - Parallel Edition
-ℹ️  Zdrojová složka: /Users/user/Movies/DJI/source
-ℹ️  Výstupní složka: /Users/user/Movies/DJI/final
-ℹ️  LUT soubor: /Users/user/Movies/DJI/Avata2.cube
-ℹ️  Kvalita: high
-ℹ️  Paralelní úlohy: 1
-ℹ️  Nalezeno 3 souborů k zpracování
-ℹ️  🔄 Sekvenční zpracování (1 úloha najednou)
+ℹ️  Source directory: /Users/user/Movies/DJI/source
+ℹ️  Output directory: /Users/user/Movies/DJI/final
+ℹ️  LUT file: /Users/user/Movies/DJI/Avata2.cube
+ℹ️  Quality: high
+ℹ️  Parallel jobs: 1
+ℹ️  Found 3 files to process
+ℹ️  🔄 Sequential processing (1 job at a time)
 
-ℹ️  📁 Soubor 1/3
-ℹ️  🎞️ Zpracovávám: DJI_20250613194533_0001_D.mp4 – délka: 123s (kvalita: high)
+ℹ️  📁 File 1/3
+ℹ️  🎞️ Processing: DJI_20250613194533_0001_D.mp4 – duration: 123s (quality: high)
 🔄 [####################-----------]  68% filename.mp4 | 1.2x | ETA: 02:34
 
-✅ Hotovo: DJI_20250613194533_0001_D.mp4
-ℹ️  Velikost: 156M | Čas: 08:23
+✅ Completed: DJI_20250613194533_0001_D.mp4
+ℹ️  Size: 156M | Time: 08:23
 
-🏁 Zpracování dokončeno!
-✅ Úspěšně zpracováno: 3
-⏱️  Celkový čas: 25:47
+🏁 Processing completed!
+✅ Successfully processed: 3
+⏱️  Total time: 25:47
 ```
 
 ### Parallel Mode (PARALLEL_JOBS>1)
 ```bash
 ℹ️  🚀 DJI Avata 2 D-Log Processor (Optimized) - Parallel Edition
-ℹ️  Zdrojová složka: /Users/user/Movies/DJI/source
-ℹ️  Výstupní složka: /Users/user/Movies/DJI/final
-ℹ️  LUT soubor: /Users/user/Movies/DJI/Avata2.cube
-ℹ️  Kvalita: high
-ℹ️  Paralelní úlohy: 4
-ℹ️  Nalezeno 8 souborů k zpracování
-ℹ️  🚀 Paralelní zpracování (4 úloh současně)
+ℹ️  Source directory: /Users/user/Movies/DJI/source
+ℹ️  Output directory: /Users/user/Movies/DJI/final
+ℹ️  LUT file: /Users/user/Movies/DJI/Avata2.cube
+ℹ️  Quality: high
+ℹ️  Parallel jobs: 4
+ℹ️  Found 8 files to process
+ℹ️  🚀 Parallel processing (4 jobs simultaneously)
 
-ℹ️  🚀 Spouštím úlohu #1: DJI_20250613194533_0001_D.mp4
-ℹ️  🚀 Spouštím úlohu #2: DJI_20250613194834_0002_D.MP4
-ℹ️  🚀 Spouštím úlohu #3: DJI_20250709155901_0003_D.mp4
-📊 Stav: 2/8 dokončeno | 3 běží | 2 úspěšných | 0 chyb
-✅ Dokončeno: DJI_20250613194533_0001_D.mp4
-ℹ️  🚀 Spouštím úlohu #4: DJI_20250615120045_0004_D.mp4
-ℹ️  ⏳ Čekám na dokončení všech úloh...
+ℹ️  🚀 Starting job #1: DJI_20250613194533_0001_D.mp4
+ℹ️  🚀 Starting job #2: DJI_20250613194834_0002_D.MP4
+ℹ️  🚀 Starting job #3: DJI_20250709155901_0003_D.mp4
+📊 Status: 2/8 completed | 3 running | 2 successful | 0 errors
+✅ Completed: DJI_20250613194533_0001_D.mp4
+ℹ️  🚀 Starting job #4: DJI_20250615120045_0004_D.mp4
+ℹ️  ⏳ Waiting for all jobs to complete...
 
-🏁 Zpracování dokončeno!
-✅ Úspěšně zpracováno: 8
-⏱️  Celkový čas: 12:30
-ℹ️  🚀 Zrychlení: ~3.2x díky paralelizaci
+🏁 Processing completed!
+✅ Successfully processed: 8
+⏱️  Total time: 12:30
+ℹ️  🚀 Speedup: ~3.2x thanks to parallelization
 ```
 
 ## 📋 Requirements
@@ -411,9 +414,13 @@ htop  # Install with: brew install htop
 
 Feel free to submit issues, feature requests, or pull requests!
 
-### Future Enhancements
+### Recent Updates
 
 - [x] ~~Parallel processing support~~ ✅ **COMPLETED** - Auto-detect cores, 2-4x speedup
+- [x] ~~English internationalization~~ ✅ **COMPLETED** - All interface messages translated
+
+### Future Enhancements
+
 - [ ] Multiple LUT support
 - [ ] Web interface
 - [ ] Progress persistence across restarts
@@ -422,6 +429,7 @@ Feel free to submit issues, feature requests, or pull requests!
 - [ ] GPU memory optimization for parallel processing
 - [ ] Dynamic job scheduling based on system load
 - [ ] Integration with macOS notifications
+- [ ] Additional language support (localization framework)
 
 ## 📄 License
 
@@ -431,8 +439,12 @@ This project is open source. Feel free to use and modify as needed.
 
 This tool processes video files. Always keep backups of your original footage. Test with sample files before batch processing important content.
 
+## 🌍 Language & Internationalization
+
+The script interface is fully in English, making it accessible to users worldwide. All status messages, error messages, and help text are provided in clear, professional English for maximum usability across different regions.
+
 ---
 
 **Happy Flying! 🚁** 
 
-*Optimized for DJI Avata 2 pilots who demand professional video quality*
+*Optimized for DJI Avata 2 pilots worldwide who demand professional video quality*

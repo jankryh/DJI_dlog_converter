@@ -293,7 +293,7 @@ process_file() {
         local size
         size=$(du -h "$output_file" | cut -f1)
         
-        log_success "Hotovo: $basename"
+        log_success "Completed: $basename"
         log_info "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")"
     else
         # Error - cleanup temp file
@@ -486,26 +486,26 @@ trap 'echo ""; log_warning "Processing interrupted by user"; cleanup_jobs; exit 
 # Show usage if help requested
 if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
     cat << EOF
-Použití: $0 [ZDROJOVÁ_SLOŽKA] [VÝSTUPNÍ_SLOŽKA] [LUT_SOUBOR]
+Usage: $0 [SOURCE_DIRECTORY] [OUTPUT_DIRECTORY] [LUT_FILE]
 
-DJI Avata 2 D-Log to Rec.709 Video Processor s paralelním zpracováním
+DJI Avata 2 D-Log to Rec.709 Video Processor with parallel processing
 
-Proměnné prostředí:
-  QUALITY_PRESET   Kvalita: high, medium, low (výchozí: high)
-  PARALLEL_JOBS    Počet paralelních úloh (výchozí: auto-detect CPU cores)
+Environment variables:
+  QUALITY_PRESET   Quality: high, medium, low (default: high)
+  PARALLEL_JOBS    Number of parallel jobs (default: auto-detect CPU cores)
 
-Příklady:
-  $0                                    # Použije výchozí cesty, auto-detect cores
-  QUALITY_PRESET=medium $0              # Střední kvalita
-  PARALLEL_JOBS=4 $0                    # 4 paralelní úlohy
-  PARALLEL_JOBS=1 $0                    # Sekvenční zpracování
-  $0 /path/to/source /path/to/output    # Vlastní cesty
+Examples:
+  $0                                    # Use default paths, auto-detect cores
+  QUALITY_PRESET=medium $0              # Medium quality
+  PARALLEL_JOBS=4 $0                    # 4 parallel jobs
+  PARALLEL_JOBS=1 $0                    # Sequential processing
+  $0 /path/to/source /path/to/output    # Custom paths
 
-Poznámky:
-  - Paralelní zpracování zrychlí konverzi více souborů
-  - Každá úloha používá všechny dostupné CPU cores
-  - Pro 1 soubor použijte PARALLEL_JOBS=1
-  - Pro více souborů doporučujeme 2-4 paralelní úlohy
+Notes:
+  - Parallel processing speeds up conversion of multiple files
+  - Each job uses all available CPU cores
+  - For 1 file use PARALLEL_JOBS=1
+  - For multiple files we recommend 2-4 parallel jobs
 EOF
     exit 0
 fi
