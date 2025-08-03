@@ -1,14 +1,25 @@
 # DJI Avata 2 D-Log Video Processor
 
-🚁 **Professional batch video processing tool for DJI Avata 2 D-Log footage**
+🚁 **Professional-grade CLI tool for DJI Avata 2 D-Log footage processing**
 
-Convert your DJI Avata 2 D-Log videos to Rec.709 color space using hardware acceleration, parallel processing, and custom LUT files. Features real-time progress tracking, ETA calculation, and multiple quality presets with intelligent multi-core utilization.
+Transform your DJI Avata 2 D-Log videos to Rec.709 color space with hardware acceleration, parallel processing, and custom LUT files. Features a **modern command-line interface**, interactive setup wizard, comprehensive validation, intelligent error handling, and bash completion for a professional user experience.
 
-🌍 **Fully internationalized** - All interface messages in English for global accessibility
-
-⚙️ **Comprehensive configuration system** - YAML-based configuration files for professional workflows
+🌟 **2025 CLI Experience** - Modern subcommand structure with intelligent tab completion  
+🧙 **Interactive Setup** - Guided configuration wizard for effortless onboarding  
+🔍 **Smart Validation** - Comprehensive dry-run mode with processing estimation  
+🛡️ **Intelligent Errors** - Context-aware error messages with actionable solutions  
+⚙️ **Professional Config** - YAML-based configuration with validation and templates
 
 ## ✨ Features
+
+### 🌟 Modern CLI Experience (NEW!)
+- **Subcommand Structure** - `process`, `status`, `config`, `validate`, `help`, `completion`
+- **Interactive Setup Wizard** - Guided 8-step configuration with smart defaults
+- **Comprehensive Validation** - Dry-run mode with processing estimation and error detection
+- **Intelligent Error Handling** - Context-aware messages with actionable troubleshooting steps
+- **Professional Help System** - Command-specific help and usage examples
+- **Bash Completion** - Intelligent tab completion for commands, options, and file paths
+- **Backward Compatibility** - Existing command-line usage continues to work
 
 ### 🎬 Core Processing
 - **Batch Processing** - Process multiple videos automatically
@@ -122,26 +133,183 @@ ffmpeg -encoders | grep videotoolbox
 
 ## 🚀 Quick Start
 
-1. **Clone or download** the script
-2. **Make it executable**:
+### 🧙 Modern Setup (Recommended - Interactive Wizard)
+
+1. **Download and make executable**:
    ```bash
    chmod +x avata2_dlog_optimized.sh
    ```
-3. **Set up configuration** (recommended):
+
+2. **Run the interactive setup wizard**:
    ```bash
-   # Copy sample configuration
+   ./avata2_dlog_optimized.sh config --setup-wizard
+   ```
+   The wizard guides you through:
+   - Source and output directory selection
+   - LUT file configuration  
+   - Quality and performance settings
+   - Workflow preferences
+   - Configuration file location
+
+3. **Validate your setup**:
+   ```bash
+   ./avata2_dlog_optimized.sh process --dry-run
+   ```
+
+4. **Start processing**:
+   ```bash
+   ./avata2_dlog_optimized.sh process
+   ```
+
+### ⚡ Quick Setup (Traditional)
+
+1. **Make executable**:
+   ```bash
+   chmod +x avata2_dlog_optimized.sh
+   ```
+
+2. **Copy sample configuration**:
+   ```bash
    cp dji-config.yml ~/.dji-processor/config.yml
-   
-   # Edit your settings
    nano ~/.dji-processor/config.yml
    ```
-4. **Prepare your files**:
-   - Source videos in your configured source directory
-   - LUT file (e.g., `Avata2.cube`)
-5. **Run the processor**:
+
+3. **Prepare files and run**:
    ```bash
    ./avata2_dlog_optimized.sh
    ```
+
+## 💻 Modern CLI Usage
+
+### 🎯 Available Commands
+
+```bash
+./avata2_dlog_optimized.sh <command> [options]
+
+COMMANDS:
+  process      Process videos (default command)
+  status       Show current processing status and system info
+  config       Manage configuration settings
+  validate     Validate setup and configuration
+  help         Show help for specific commands
+  completion   Generate and install bash completion
+```
+
+### 🔧 Command Examples
+
+#### Interactive Setup
+```bash
+# Launch configuration wizard
+./avata2_dlog_optimized.sh config --setup-wizard
+
+# Show current configuration
+./avata2_dlog_optimized.sh config --show
+
+# Validate configuration file
+./avata2_dlog_optimized.sh config --validate
+```
+
+#### Processing with Validation
+```bash
+# Validate setup before processing (recommended)
+./avata2_dlog_optimized.sh process --dry-run
+
+# Process with default settings
+./avata2_dlog_optimized.sh process
+
+# Process with custom paths
+./avata2_dlog_optimized.sh process /custom/source /custom/output
+
+# Override quality via environment
+QUALITY_PRESET=medium ./avata2_dlog_optimized.sh process
+```
+
+#### System Status and Validation
+```bash
+# Check system status and running jobs
+./avata2_dlog_optimized.sh status
+
+# Comprehensive setup validation
+./avata2_dlog_optimized.sh validate
+
+# Validate specific configuration
+CONFIG_FILE=./my-config.yml ./avata2_dlog_optimized.sh validate
+```
+
+#### Help System
+```bash
+# General help
+./avata2_dlog_optimized.sh help
+
+# Command-specific help
+./avata2_dlog_optimized.sh help process
+./avata2_dlog_optimized.sh help config
+
+# Quick command help
+./avata2_dlog_optimized.sh process --help
+```
+
+#### Bash Completion
+```bash
+# Install system-wide completion
+./avata2_dlog_optimized.sh completion --install
+
+# Generate completion script
+./avata2_dlog_optimized.sh completion > ~/.local/share/bash-completion/completions/dji-processor
+
+# Enable for current session
+eval "$(./avata2_dlog_optimized.sh completion)"
+```
+
+### 🔍 Dry-Run Validation Features
+
+The `--dry-run` option provides comprehensive validation without processing:
+
+```bash
+./avata2_dlog_optimized.sh process --dry-run
+```
+
+**Validation includes:**
+- Source directory existence and permissions
+- Output directory creation capability
+- LUT file validity and format checking
+- Disk space availability assessment
+- Dependencies verification (FFmpeg, encoders)
+- Configuration value validation
+- **Processing estimation** with file counts, sizes, and time estimates
+
+### 🎯 Sample Dry-Run Output
+
+```bash
+🔍 Comprehensive Processing Validation
+======================================
+
+📋 Configuration Summary:
+Source directory: /Users/user/Movies/DJI/source
+Output directory: /Users/user/Movies/DJI/final
+LUT file: /Users/user/Movies/DJI/Avata2.cube
+Quality preset: high
+Parallel jobs: 10
+
+🔍 Validation Checks:
+✅ Source directory exists and readable
+✅ Found 4 video files to process
+✅ Output directory writable
+✅ LUT file valid (.cube format)
+✅ Sufficient disk space: 1.2TB available
+✅ Dependencies: FFmpeg 7.1.1, x264 encoder
+✅ Configuration: all values valid
+
+📊 Processing Estimation:
+Files to process: 4
+Total size: 2.1GB
+Largest file: 640MB
+Estimated time: ~18m (approximate)
+
+📋 Validation Summary:
+🎉 All validation checks passed! Ready to process.
+💡 To start processing, run without --dry-run flag
+```
 
 ## ⚙️ Configuration System
 
@@ -229,74 +397,115 @@ CONFIG_FILE=./project-config.yml ./avata2_dlog_optimized.sh
 PARALLEL_JOBS=6 QUALITY_PRESET=high ./avata2_dlog_optimized.sh
 ```
 
-## 📖 Usage
+## 📖 Usage Patterns
 
-### Recommended: Configuration File Approach
+### 🧙 Modern Workflow (Recommended)
 
 ```bash
-# 1. Set up your configuration (one time)
-cp dji-config.yml ~/.dji-processor/config.yml
-nano ~/.dji-processor/config.yml
+# 1. First-time setup with interactive wizard
+./avata2_dlog_optimized.sh config --setup-wizard
 
-# 2. Run with your saved settings
-./avata2_dlog_optimized.sh
+# 2. Validate your setup before processing
+./avata2_dlog_optimized.sh process --dry-run
 
-# 3. Override specific settings when needed
-QUALITY_PRESET=medium ./avata2_dlog_optimized.sh
+# 3. Process videos
+./avata2_dlog_optimized.sh process
+
+# 4. Check processing status
+./avata2_dlog_optimized.sh status
 ```
 
-### Traditional: Command Line Arguments
+### ⚡ Daily Usage Patterns
 
 ```bash
-# Use built-in defaults
+# Quick processing with default settings
 ./avata2_dlog_optimized.sh
 
-# Custom source and output directories
-./avata2_dlog_optimized.sh /path/to/source /path/to/output
+# Validate setup first (recommended for new projects)
+./avata2_dlog_optimized.sh process --dry-run && ./avata2_dlog_optimized.sh process
 
-# Custom source, output, and LUT file
+# Process with specific quality
+QUALITY_PRESET=medium ./avata2_dlog_optimized.sh process
+
+# Check system status and running jobs
+./avata2_dlog_optimized.sh status
+
+# One-time directory override
+./avata2_dlog_optimized.sh process /custom/source /custom/output
+```
+
+### 🔧 Configuration Management
+
+```bash
+# Interactive setup wizard (recommended for new users)
+./avata2_dlog_optimized.sh config --setup-wizard
+
+# Show current configuration
+./avata2_dlog_optimized.sh config --show
+
+# Validate configuration file
+./avata2_dlog_optimized.sh config --validate
+
+# Use custom configuration
+CONFIG_FILE=./project-config.yml ./avata2_dlog_optimized.sh process
+```
+
+### 🎯 Quality and Performance Control
+
+```bash
+# Quality presets
+QUALITY_PRESET=high ./avata2_dlog_optimized.sh process     # 15Mbps, best for archival
+QUALITY_PRESET=medium ./avata2_dlog_optimized.sh process   # 10Mbps, balanced
+QUALITY_PRESET=low ./avata2_dlog_optimized.sh process      # 6Mbps, quick sharing
+
+# Parallel processing control
+PARALLEL_JOBS=4 ./avata2_dlog_optimized.sh process         # 4 simultaneous jobs
+PARALLEL_JOBS=2 ./avata2_dlog_optimized.sh process         # 2 jobs (thermal management)
+PARALLEL_JOBS=1 ./avata2_dlog_optimized.sh process         # Sequential processing
+
+# Combined settings
+PARALLEL_JOBS=3 QUALITY_PRESET=medium ./avata2_dlog_optimized.sh process
+```
+
+### 📚 Help and Documentation
+
+```bash
+# General help and command overview
+./avata2_dlog_optimized.sh help
+
+# Command-specific help
+./avata2_dlog_optimized.sh help process
+./avata2_dlog_optimized.sh help config
+./avata2_dlog_optimized.sh help validate
+
+# Quick option help
+./avata2_dlog_optimized.sh process --help
+./avata2_dlog_optimized.sh config --help
+```
+
+### 🖥️ Bash Completion Setup
+
+```bash
+# Install completion system-wide
+./avata2_dlog_optimized.sh completion --install
+
+# Enable for current session only
+eval "$(./avata2_dlog_optimized.sh completion)"
+
+# Then enjoy tab completion:
+./avata2_dlog_optimized.sh <TAB><TAB>        # Show all commands
+./avata2_dlog_optimized.sh config --<TAB>    # Show config options
+./avata2_dlog_optimized.sh help <TAB>        # Show help topics
+```
+
+### 🔄 Backward Compatibility
+
+The tool maintains full backward compatibility with existing usage:
+
+```bash
+# Traditional usage still works
 ./avata2_dlog_optimized.sh /path/to/source /path/to/output /path/to/lut.cube
-```
-
-### Quality Presets
-
-Control encoding quality using environment variables:
-
-```bash
-# High quality (default) - 15Mbps, best for archival
-QUALITY_PRESET=high ./avata2_dlog_optimized.sh
-
-# Medium quality - 10Mbps, balanced size/quality
 QUALITY_PRESET=medium ./avata2_dlog_optimized.sh
-
-# Low quality - 6Mbps, smaller files for quick sharing
-QUALITY_PRESET=low ./avata2_dlog_optimized.sh
-```
-
-### Parallel Processing
-
-Control how many videos process simultaneously:
-
-```bash
-# Auto-detect CPU cores (default, recommended)
-./avata2_dlog_optimized.sh
-
-# Use 4 parallel jobs (good for 8+ core systems)
-PARALLEL_JOBS=4 ./avata2_dlog_optimized.sh
-
-# Use 2 parallel jobs (good for 4-6 core systems)
-PARALLEL_JOBS=2 ./avata2_dlog_optimized.sh
-
-# Sequential processing (original behavior, single core)
-PARALLEL_JOBS=1 ./avata2_dlog_optimized.sh
-
-# Combined with quality settings
-PARALLEL_JOBS=3 QUALITY_PRESET=medium ./avata2_dlog_optimized.sh
-```
-
-### Help
-
-```bash
 ./avata2_dlog_optimized.sh --help
 ```
 
@@ -724,21 +933,40 @@ Feel free to submit issues, feature requests, or pull requests!
 ### Recent Updates
 
 - [x] ~~Parallel processing support~~ ✅ **COMPLETED** - Auto-detect cores, 2-4x speedup
-- [x] ~~English internationalization~~ ✅ **COMPLETED** - All interface messages translated
+- [x] ~~English internationalization~~ ✅ **COMPLETED** - All interface messages translated  
 - [x] ~~Configuration file system~~ ✅ **COMPLETED** - YAML-based professional workflow support
+- [x] ~~Modern CLI interface~~ ✅ **COMPLETED** - Subcommand structure with intelligent features
+- [x] ~~Interactive setup wizard~~ ✅ **COMPLETED** - Guided 8-step configuration process
+- [x] ~~Comprehensive validation~~ ✅ **COMPLETED** - Dry-run mode with processing estimation
+- [x] ~~Intelligent error handling~~ ✅ **COMPLETED** - Context-aware messages with solutions
+- [x] ~~Bash completion support~~ ✅ **COMPLETED** - Professional tab completion system
+
+### ✨ Latest Major Update: CLI UX Transformation
+
+**🎉 January 2025 - Complete CLI Experience Overhaul**
+
+The tool has been completely modernized with a professional CLI interface that rivals industry-standard DevOps tools:
+
+- **🌟 Modern Command Structure**: Intuitive subcommands (`process`, `status`, `config`, `validate`, `help`)
+- **🧙 Interactive Setup Wizard**: Zero-friction onboarding with guided configuration
+- **🔍 Smart Validation**: Comprehensive dry-run mode with detailed analysis and estimation
+- **🛡️ Intelligent Error Handling**: Context-aware messages with actionable troubleshooting steps
+- **📚 Professional Help System**: Command-specific documentation and examples
+- **⌨️ Bash Completion**: Intelligent tab completion for all commands and options
+- **🔄 Backward Compatibility**: All existing usage patterns continue to work
 
 ### Future Enhancements
 
-- [ ] Multiple LUT support
-- [ ] Web interface
+- [ ] Multiple LUT support with automatic drone detection
+- [ ] Web interface for remote processing management  
 - [ ] Progress persistence across restarts
-- [ ] Auto-quality selection based on source
+- [ ] Auto-quality selection based on source analysis
 - [ ] GPU memory optimization for parallel processing
 - [ ] Dynamic job scheduling based on system load
-- [ ] Additional language support (localization framework)
-- [ ] Configuration file validation and schema
-- [ ] Template system for common workflows
-- [ ] Integration with video editing software
+- [ ] Workflow templates and batch processing pipelines
+- [ ] Integration with video editing software (Final Cut Pro, Premiere)
+- [ ] Cloud storage integration (iCloud, Dropbox, AWS S3)
+- [ ] Advanced metadata analysis and organization
 
 ## 📄 License
 

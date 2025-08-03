@@ -81,6 +81,20 @@ load_config_file() {
         return 1
     fi
     
+    # Validate config file is readable
+    if [[ ! -r "$config_file" ]]; then
+        handle_error "PERMISSION_ERROR" "Cannot read configuration file: $config_file"
+    fi
+    
+    # Basic YAML syntax validation (if PyYAML is available)
+    if command -v python3 >/dev/null 2>&1; then
+        if python3 -c "import yaml" 2>/dev/null; then
+            if ! python3 -c "import yaml; yaml.safe_load(open('$config_file'))" 2>/dev/null; then
+                handle_error "INVALID_CONFIG" "YAML syntax error in configuration file" "$config_file"
+            fi
+        fi
+    fi
+    
     log_info "📄 Loading configuration from: $config_file"
     
     # Parse configuration values
@@ -169,19 +183,285 @@ apply_config() {
         load_config_file "$DEFAULT_CONFIG_FILE"
     fi
     
-    # Handle parallel jobs setting
+    # Handle parallel jobs setting with validation
     if [[ "$PARALLEL_JOBS" == "auto" || "$PARALLEL_JOBS" == "0" ]]; then
         PARALLEL_JOBS=$(sysctl -n hw.ncpu 2>/dev/null || echo "2")
+    elif ! [[ "$PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ $PARALLEL_JOBS -lt 1 ]] || [[ $PARALLEL_JOBS -gt 32 ]]; then
+        handle_error "INVALID_CONFIG" "Invalid parallel_jobs value: $PARALLEL_JOBS (must be 1-32 or 'auto')"
     fi
+    
+
     
     # Apply command line overrides
     [[ -n "${1:-}" ]] && SOURCE_DIR="$1"
     [[ -n "${2:-}" ]] && FINAL_DIR="$2"
     [[ -n "${3:-}" ]] && LUT_FILE="$3"
     
-    # Apply environment variable overrides
-    QUALITY_PRESET="${QUALITY_PRESET:-$QUALITY_PRESET}"
-    PARALLEL_JOBS="${PARALLEL_JOBS:-$PARALLEL_JOBS}"
+    # Apply environment variable overrides (these override config file values)
+    # Note: bash expansion ${VAR:-default} keeps existing value if VAR is set
+    # We want to preserve environment variables even if config file sets different values
+    
+    # Re-validate after environment variable overrides
+    if [[ "$PARALLEL_JOBS" != "auto" && "$PARALLEL_JOBS" != "0" ]]; then
+        if ! [[ "$PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ $PARALLEL_JOBS -lt 1 ]] || [[ $PARALLEL_JOBS -gt 32 ]]; then
+            handle_error "INVALID_CONFIG" "Invalid PARALLEL_JOBS environment variable: $PARALLEL_JOBS (must be 1-32 or 'auto')"
+        fi
+    fi
+    
+    case "$QUALITY_PRESET" in
+        high|medium|low) ;;
+        *) handle_error "INVALID_CONFIG" "Invalid QUALITY_PRESET value: $QUALITY_PRESET (must be 'high', 'medium', or 'low')" ;;
+    esac
+    
+    # Final validation of all configuration values
+    if [[ "$PARALLEL_JOBS" != "auto" && "$PARALLEL_JOBS" != "0" ]]; then
+        if ! [[ "$PARALLEL_JOBS" =~ ^[0-9]+$ ]] || [[ $PARALLEL_JOBS -lt 1 ]] || [[ $PARALLEL_JOBS -gt 32 ]]; then
+            handle_error "INVALID_CONFIG" "Invalid parallel_jobs value: $PARALLEL_JOBS (must be 1-32 or 'auto')"
+        fi
+    fi
+}
+
+# Comprehensive validation for processing setup (used by dry-run and early validation)
+validate_processing_setup() {
+    log_info "🔍 Comprehensive Processing Validation"
+    echo "======================================"
+    
+    local validation_errors=0
+    local validation_warnings=0
+    
+    # Apply configuration with arguments
+    apply_config "$@"
+    
+    echo ""
+    log_info "📋 Configuration Summary:"
+    echo "Source directory: $SOURCE_DIR"
+    echo "Output directory: $FINAL_DIR"
+    echo "LUT file: $LUT_FILE"
+    echo "Quality preset: $QUALITY_PRESET"
+    echo "Parallel jobs: $PARALLEL_JOBS"
+    
+    echo ""
+    log_info "🔍 Validation Checks:"
+    
+    # 1. Validate source directory
+    if [[ -d "$SOURCE_DIR" ]]; then
+        log_success "✅ Source directory exists: $SOURCE_DIR"
+        
+        # Check if readable
+        if [[ -r "$SOURCE_DIR" ]]; then
+            log_success "✅ Source directory is readable"
+        else
+            log_error "❌ Source directory not readable: $SOURCE_DIR"
+            ((validation_errors++))
+        fi
+        
+        # Check for video files
+        local video_count
+        video_count=$(find "$SOURCE_DIR" -type f \( -iname "*.mp4" -o -iname "*.mov" \) 2>/dev/null | wc -l)
+        if [[ $video_count -gt 0 ]]; then
+            log_success "✅ Found $video_count video files to process"
+        else
+            log_warning "⚠️  No video files found in source directory"
+            ((validation_warnings++))
+        fi
+    else
+        log_error "❌ Source directory not found: $SOURCE_DIR"
+        ((validation_errors++))
+    fi
+    
+    # 2. Validate output directory
+    if [[ -d "$FINAL_DIR" ]]; then
+        log_success "✅ Output directory exists: $FINAL_DIR"
+    else
+        log_info "🔧 Output directory will be created: $FINAL_DIR"
+        if mkdir -p "$FINAL_DIR" 2>/dev/null; then
+            log_success "✅ Output directory created successfully"
+            rmdir "$FINAL_DIR" 2>/dev/null  # Clean up test directory
+        else
+            log_error "❌ Cannot create output directory: $FINAL_DIR"
+            ((validation_errors++))
+        fi
+    fi
+    
+    # Check write permissions for output directory
+    if [[ -d "$FINAL_DIR" ]] && [[ -w "$FINAL_DIR" ]]; then
+        log_success "✅ Output directory is writable"
+    elif [[ -d "$FINAL_DIR" ]]; then
+        log_error "❌ Output directory not writable: $FINAL_DIR"
+        ((validation_errors++))
+    fi
+    
+    # 3. Validate LUT file
+    if [[ -f "$LUT_FILE" ]]; then
+        log_success "✅ LUT file exists: $LUT_FILE"
+        
+        # Check if readable
+        if [[ -r "$LUT_FILE" ]]; then
+            log_success "✅ LUT file is readable"
+            
+            # Basic LUT file validation
+            if [[ "$LUT_FILE" =~ \.cube$ ]]; then
+                log_success "✅ LUT file has correct .cube extension"
+                
+                # Check file content
+                if head -n 5 "$LUT_FILE" | grep -q "LUT_3D_SIZE\|TITLE" 2>/dev/null; then
+                    log_success "✅ LUT file appears to be valid"
+                else
+                    log_warning "⚠️  LUT file format may be invalid (no standard headers found)"
+                    ((validation_warnings++))
+                fi
+            else
+                log_warning "⚠️  LUT file doesn't have .cube extension: $LUT_FILE"
+                ((validation_warnings++))
+            fi
+        else
+            log_error "❌ LUT file not readable: $LUT_FILE"
+            ((validation_errors++))
+        fi
+    else
+        log_error "❌ LUT file not found: $LUT_FILE"
+        ((validation_errors++))
+    fi
+    
+    # 4. Check disk space
+    if [[ -d "$FINAL_DIR" ]] || mkdir -p "$FINAL_DIR" 2>/dev/null; then
+        local available_space
+        available_space=$(df "$FINAL_DIR" 2>/dev/null | awk 'NR==2 {print $4}')
+        if [[ -n "$available_space" ]]; then
+            local space_gb=$((available_space / 1024 / 1024))
+            local space_mb=$((available_space / 1024))
+            
+            if [[ $space_gb -ge 10 ]]; then
+                log_success "✅ Sufficient disk space: ${space_gb}GB available"
+            elif [[ $space_gb -ge 1 ]]; then
+                log_success "✅ Adequate disk space: ${space_gb}GB available"
+            elif [[ $space_mb -ge 500 ]]; then
+                log_warning "⚠️  Limited disk space: ${space_mb}MB available"
+                ((validation_warnings++))
+            else
+                log_error "❌ Insufficient disk space: ${space_mb}MB available (recommend at least 1GB)"
+                ((validation_errors++))
+            fi
+        fi
+    fi
+    
+    # 5. Validate dependencies
+    check_dependencies
+    
+    # 6. Validate configuration values
+    log_info "🔧 Configuration validation:"
+    
+    case "$QUALITY_PRESET" in
+        high|medium|low)
+            log_success "✅ Quality preset valid: $QUALITY_PRESET"
+            ;;
+        *)
+            log_error "❌ Invalid quality preset: $QUALITY_PRESET"
+            ((validation_errors++))
+            ;;
+    esac
+    
+    if [[ "$PARALLEL_JOBS" =~ ^[0-9]+$ ]] && [[ $PARALLEL_JOBS -ge 1 ]] && [[ $PARALLEL_JOBS -le 32 ]]; then
+        log_success "✅ Parallel jobs setting valid: $PARALLEL_JOBS"
+    elif [[ "$PARALLEL_JOBS" == "auto" ]]; then
+        local detected_cores
+        detected_cores=$(sysctl -n hw.ncpu 2>/dev/null || echo "unknown")
+        log_success "✅ Parallel jobs auto-detection: $detected_cores cores"
+    else
+        log_error "❌ Invalid parallel jobs setting: $PARALLEL_JOBS"
+        ((validation_errors++))
+    fi
+    
+    # 7. Estimate processing requirements
+    if [[ $validation_errors -eq 0 && -d "$SOURCE_DIR" ]]; then
+        echo ""
+        log_info "📊 Processing Estimation:"
+        
+        local total_size=0
+        local file_count=0
+        local largest_file=0
+        
+        while IFS= read -r -d '' file; do
+            if [[ -f "$file" ]]; then
+                local file_size
+                file_size=$(stat -f%z "$file" 2>/dev/null || echo "0")
+                total_size=$((total_size + file_size))
+                ((file_count++))
+                if [[ $file_size -gt $largest_file ]]; then
+                    largest_file=$file_size
+                fi
+            fi
+        done < <(find "$SOURCE_DIR" -type f \( -iname "*.mp4" -o -iname "*.mov" \) -print0 2>/dev/null)
+        
+        if [[ $file_count -gt 0 ]]; then
+            local total_gb=$((total_size / 1024 / 1024 / 1024))
+            local total_mb=$((total_size / 1024 / 1024))
+            local largest_mb=$((largest_file / 1024 / 1024))
+            
+            echo "Files to process: $file_count"
+            if [[ $total_gb -gt 0 ]]; then
+                echo "Total size: ${total_gb}GB"
+            else
+                echo "Total size: ${total_mb}MB"
+            fi
+            echo "Largest file: ${largest_mb}MB"
+            
+            # Estimate processing time (very rough)
+            local est_minutes=$((total_mb / 100))  # Rough estimate: 100MB per minute
+            if [[ $est_minutes -gt 60 ]]; then
+                local est_hours=$((est_minutes / 60))
+                local rem_minutes=$((est_minutes % 60))
+                echo "Estimated time: ~${est_hours}h ${rem_minutes}m (approximate)"
+            else
+                echo "Estimated time: ~${est_minutes}m (approximate)"
+            fi
+        fi
+    fi
+    
+    # 8. Summary
+    echo ""
+    log_info "📋 Validation Summary:"
+    if [[ $validation_errors -eq 0 ]]; then
+        if [[ $validation_warnings -eq 0 ]]; then
+            log_success "🎉 All validation checks passed! Ready to process."
+        else
+            log_warning "⚠️  Validation completed with $validation_warnings warning(s). Processing should work but review warnings above."
+        fi
+        log_info "💡 To start processing, run without --dry-run flag"
+        exit 0
+    else
+        log_error "💥 Validation failed with $validation_errors error(s) and $validation_warnings warning(s)"
+        log_info "💡 Fix the errors above before attempting to process files"
+        exit 1
+    fi
+}
+
+# Early validation function (quick checks before starting main processing)
+validate_early() {
+    local quick_errors=0
+    
+    # Quick existence checks
+    [[ -d "$SOURCE_DIR" ]] || ((quick_errors++))
+    [[ -f "$LUT_FILE" ]] || ((quick_errors++))
+    
+    # Quick configuration checks
+    case "$QUALITY_PRESET" in
+        high|medium|low) ;;
+        *) ((quick_errors++)) ;;
+    esac
+    
+    if [[ "$PARALLEL_JOBS" != "auto" ]]; then
+        [[ "$PARALLEL_JOBS" =~ ^[0-9]+$ ]] && [[ $PARALLEL_JOBS -ge 1 ]] && [[ $PARALLEL_JOBS -le 32 ]] || ((quick_errors++))
+    fi
+    
+    # Quick dependency check
+    command -v ffmpeg >/dev/null 2>&1 || ((quick_errors++))
+    command -v ffprobe >/dev/null 2>&1 || ((quick_errors++))
+    
+    if [[ $quick_errors -gt 0 ]]; then
+        log_warning "⚠️  Quick validation found potential issues. Running comprehensive validation..."
+        validate_inputs  # This will provide detailed error messages
+    fi
 }
 
 # Quality presets (bash 3.2 compatible)
@@ -207,31 +487,144 @@ log_success() { echo -e "${GREEN}✅ $1${NC}"; }
 log_warning() { echo -e "${YELLOW}⚠️  $1${NC}"; }
 log_error() { echo -e "${RED}❌ $1${NC}" >&2; }
 
-# Check dependencies
+# Check dependencies with enhanced error handling
 check_dependencies() {
     local missing_deps=()
     
-    command -v ffmpeg >/dev/null 2>&1 || missing_deps+=("ffmpeg")
-    command -v ffprobe >/dev/null 2>&1 || missing_deps+=("ffprobe")
+    if ! command -v ffmpeg >/dev/null 2>&1; then
+        missing_deps+=("ffmpeg")
+    fi
+    
+    if ! command -v ffprobe >/dev/null 2>&1; then
+        missing_deps+=("ffprobe")
+    fi
     
     if [[ ${#missing_deps[@]} -gt 0 ]]; then
-        log_error "Missing dependencies: ${missing_deps[*]}"
-        log_error "Install with: brew install ffmpeg"
-        exit 1
+        for dep in "${missing_deps[@]}"; do
+            handle_error "MISSING_DEPENDENCY" "$dep"
+        done
+    fi
+    
+    # Additional checks for optimal performance
+    if command -v ffmpeg >/dev/null 2>&1; then
+        local ffmpeg_version
+        ffmpeg_version=$(ffmpeg -version 2>/dev/null | head -n1 | grep -o 'version [0-9.]*' | cut -d' ' -f2)
+        log_info "✅ FFmpeg version $ffmpeg_version found"
+        
+        # Check for common encoding libraries
+        if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q libx264; then
+            log_info "✅ x264 encoder available"
+        else
+            log_warning "⚠️  x264 encoder not found - limited encoding options"
+        fi
     fi
 }
 
-# Validate inputs
+# Enhanced error handling system
+handle_error() {
+    local error_code="$1"
+    local error_message="$2"
+    local context="${3:-}"
+    local suggestion="${4:-}"
+    
+    case "$error_code" in
+        MISSING_SOURCE_DIR)
+            log_error "Source directory not found: $error_message"
+            if [[ -n "$suggestion" ]]; then
+                log_info "💡 $suggestion"
+            else
+                log_info "💡 Create the directory or update your configuration:"
+                log_info "   mkdir -p \"$error_message\""
+                log_info "   or edit dji-config.yml and set source_directory"
+            fi
+            ;;
+        MISSING_LUT_FILE)
+            log_error "LUT file not found: $error_message"
+            log_info "💡 Possible solutions:"
+            log_info "   1. Download a LUT file for your DJI drone"
+            log_info "   2. Copy your LUT file to: $error_message"
+            log_info "   3. Update the lut_file path in your configuration"
+            ;;
+        MISSING_OUTPUT_DIR)
+            log_error "Cannot create output directory: $error_message"
+            log_info "💡 Check directory permissions and available disk space"
+            ;;
+        INVALID_CONFIG)
+            log_error "Configuration error: $error_message"
+            if [[ -n "$context" ]]; then
+                log_info "📄 In file: $context"
+            fi
+            log_info "💡 Run './avata2_dlog_optimized.sh config --validate' to check your configuration"
+            ;;
+        MISSING_DEPENDENCY)
+            log_error "Missing required dependency: $error_message"
+            case "$error_message" in
+                ffmpeg)
+                    log_info "💡 Install FFmpeg:"
+                    log_info "   macOS: brew install ffmpeg"
+                    log_info "   Linux: sudo apt-get install ffmpeg"
+                    ;;
+                *)
+                    log_info "💡 Please install $error_message and try again"
+                    ;;
+            esac
+            ;;
+        INSUFFICIENT_SPACE)
+            log_error "Insufficient disk space: $error_message"
+            log_info "💡 Free up disk space or choose a different output directory"
+            ;;
+        PERMISSION_ERROR)
+            log_error "Permission denied: $error_message"
+            log_info "💡 Check file/directory permissions or run with appropriate privileges"
+            ;;
+        *)
+            log_error "$error_message"
+            [[ -n "$suggestion" ]] && log_info "💡 $suggestion"
+            ;;
+    esac
+    
+    exit 1
+}
+
+# Validate inputs with enhanced error handling
 validate_inputs() {
-    [[ -d "$SOURCE_DIR" ]] || { log_error "Source directory not found: $SOURCE_DIR"; exit 1; }
-    [[ -f "$LUT_FILE" ]] || { log_error "LUT file not found: $LUT_FILE"; exit 1; }
+    local errors=0
+    
+    # Validate source directory
+    if [[ ! -d "$SOURCE_DIR" ]]; then
+        handle_error "MISSING_SOURCE_DIR" "$SOURCE_DIR"
+    fi
+    
+    # Validate LUT file
+    if [[ ! -f "$LUT_FILE" ]]; then
+        handle_error "MISSING_LUT_FILE" "$LUT_FILE"
+    fi
+    
+    # Validate output directory is writable
+    if [[ ! -d "$FINAL_DIR" ]]; then
+        if ! mkdir -p "$FINAL_DIR" 2>/dev/null; then
+            handle_error "MISSING_OUTPUT_DIR" "$FINAL_DIR"
+        fi
+    elif [[ ! -w "$FINAL_DIR" ]]; then
+        handle_error "PERMISSION_ERROR" "Cannot write to output directory: $FINAL_DIR"
+    fi
+    
+    # Check available disk space (at least 1GB free)
+    local available_space
+    available_space=$(df "$FINAL_DIR" | awk 'NR==2 {print $4}')
+    if [[ -n "$available_space" && $available_space -lt 1048576 ]]; then
+        local space_mb=$((available_space / 1024))
+        handle_error "INSUFFICIENT_SPACE" "Only ${space_mb}MB available in output directory (recommend at least 1GB)"
+    fi
     
     # Check if videotoolbox is available
     if ! ffmpeg -hide_banner -encoders 2>/dev/null | grep -q h264_videotoolbox; then
         log_warning "Hardware acceleration (videotoolbox) not available, falling back to software encoding"
+        log_info "💡 Software encoding will be slower but still functional"
         ENCODER="libx264"
         HWACCEL=""
     else
+        log_info "✅ Hardware acceleration (VideoToolbox) available"
         ENCODER="h264_videotoolbox"
         HWACCEL="-hwaccel videotoolbox"
     fi
@@ -415,11 +808,21 @@ process_file() {
         fi
     fi
     
-    # Get duration
+    # Get duration with enhanced error handling
     local duration
-    duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null)
+    if ! duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$input_file" 2>/dev/null); then
+        log_error "Cannot read video file: $basename"
+        log_info "💡 Possible issues:"
+        log_info "   1. File is corrupted or incomplete"
+        log_info "   2. Unsupported video format"
+        log_info "   3. File permissions issue"
+        log_info "   Try: ffprobe -i \"$input_file\" to see detailed error information"
+        return 1
+    fi
+    
     if [[ -z "$duration" || "$duration" == "N/A" ]]; then
         log_error "Cannot determine video duration: $basename"
+        log_info "💡 This might be a corrupted or unsupported video file"
         return 1
     fi
     
@@ -517,10 +920,24 @@ process_file() {
         log_success "Completed: $basename"
         log_info "Size: $size | Time: $(printf "%02d:%02d" "$proc_min" "$proc_sec")"
     else
-        # Error - cleanup temp file
+        # Error - cleanup temp file and provide helpful information
         [[ -f "$temp_file" ]] && rm -f "$temp_file"
         echo ""  # New line after progress bar
         log_error "Error processing: $basename"
+        
+        # Provide helpful debugging information
+        log_info "💡 Troubleshooting steps:"
+        log_info "   1. Check that the LUT file is valid: $LUT_FILE"
+        log_info "   2. Verify sufficient disk space in output directory"
+        log_info "   3. Try with a different quality preset (QUALITY_PRESET=medium)"
+        log_info "   4. Check the source file isn't corrupted"
+        
+        # Suggest running with verbose mode
+        if [[ "$VERBOSE_LOGGING" != "true" ]]; then
+            log_info "   5. Enable verbose logging to see detailed error information:"
+            log_info "      VERBOSE_LOGGING=true ./avata2_dlog_optimized.sh"
+        fi
+        
         return 1
     fi
 }
@@ -613,6 +1030,9 @@ process_file_parallel() {
 main() {
     # Apply configuration first
     apply_config "$@"
+    
+    # Run early validation to catch issues before processing starts
+    validate_early
     
     log_info "🚀 DJI Avata 2 D-Log Processor (Optimized) - Parallel Edition"
     log_info "Source directory: $SOURCE_DIR"
@@ -795,12 +1215,157 @@ main() {
 # Handle interruption gracefully
 trap 'echo ""; log_warning "Processing interrupted by user"; cleanup_jobs; exit 130' INT TERM
 
-# Show usage if help requested
-if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+# Command parsing and routing
+parse_command() {
+    local command="${1:-}"
+    
+    # Check for help flags first
+    if [[ "$command" =~ ^(-h|--help)$ ]]; then
+        show_general_help
+        exit 0
+    fi
+    
+    # Detect if first argument is a subcommand
+    case "$command" in
+        process)
+            shift
+            command_process "$@"
+            ;;
+        status)
+            shift
+            command_status "$@"
+            ;;
+        config)
+            shift
+            command_config "$@"
+            ;;
+        validate)
+            shift
+            command_validate "$@"
+            ;;
+        help)
+            shift
+            command_help "$@"
+            ;;
+        completion)
+            shift
+            command_completion "$@"
+            ;;
+        "")
+            # No arguments - use default behavior (process)
+            command_process "$@"
+            ;;
+        *)
+            # Check if it looks like an old-style positional argument (path)
+            if [[ -d "$command" || "$command" =~ ^/ || "$command" =~ ^\. ]]; then
+                log_info "📄 Using legacy argument format (backward compatibility)"
+                command_process "$@"
+            else
+                log_error "Unknown command: $command"
+                echo ""
+                suggest_command "$command"
+                echo ""
+                log_info "💡 Run './avata2_dlog_optimized.sh help' for available commands"
+                exit 1
+            fi
+            ;;
+    esac
+}
+
+# Command suggestion system for typos
+suggest_command() {
+    local input="$1"
+    local commands=("process" "status" "config" "validate" "help")
+    local best_match=""
+    local min_distance=999
+    
+    for cmd in "${commands[@]}"; do
+        local distance=$(string_similarity "$input" "$cmd")
+        if [[ $distance -lt $min_distance && $distance -le 2 ]]; then
+            min_distance=$distance
+            best_match="$cmd"
+        fi
+    done
+    
+    if [[ -n "$best_match" ]]; then
+        log_info "💡 Did you mean: './avata2_dlog_optimized.sh $best_match'?"
+    fi
+}
+
+# Simple string similarity for command suggestions
+string_similarity() {
+    local str1="$1"
+    local str2="$2"
+    local len1=${#str1}
+    local len2=${#str2}
+    
+    # If one string is much longer than the other, it's probably not a match
+    local len_diff=$((len1 > len2 ? len1 - len2 : len2 - len1))
+    if [[ $len_diff -gt 3 ]]; then
+        echo 99
+        return
+    fi
+    
+    # Check for substring match (common typos)
+    if [[ "$str2" == *"$str1"* ]] || [[ "$str1" == *"$str2"* ]]; then
+        echo 1
+        return
+    fi
+    
+    # Check for common single character errors (insertion, deletion, substitution)
+    local min_len=$((len1 < len2 ? len1 : len2))
+    if [[ $len_diff -le 1 ]]; then
+        local common_chars=0
+        for ((i=0; i<min_len; i++)); do
+            if [[ "${str1:$i:1}" == "${str2:$i:1}" ]]; then
+                ((common_chars++))
+            fi
+        done
+        
+        # If most characters match, it's likely a typo
+        if [[ $common_chars -ge $((min_len - 2)) ]]; then
+            echo 1
+            return
+        fi
+    fi
+    
+    # Count character differences  
+    local diff=0
+    local max_len=$((len1 > len2 ? len1 : len2))
+    
+    # Add length difference
+    diff=$((max_len - min_len))
+    
+    # Compare characters
+    for ((i=0; i<min_len; i++)); do
+        if [[ "${str1:$i:1}" != "${str2:$i:1}" ]]; then
+            ((diff++))
+        fi
+    done
+    
+    echo $diff
+}
+
+# General help function
+show_general_help() {
     cat << EOF
-Usage: $0 [SOURCE_DIRECTORY] [OUTPUT_DIRECTORY] [LUT_FILE]
+Usage: $0 [COMMAND] [OPTIONS]
 
 DJI Avata 2 D-Log to Rec.709 Video Processor with parallel processing and configuration support
+
+COMMANDS:
+  process     Process videos (default command)
+  status      Show current processing status
+  config      Manage configuration
+  validate    Validate setup and files
+  help        Show help for specific commands
+  completion  Generate bash completion script
+
+LEGACY USAGE (backward compatible):
+  $0 [SOURCE_DIRECTORY] [OUTPUT_DIRECTORY] [LUT_FILE]
+
+GLOBAL OPTIONS:
+  -h, --help  Show this help message
 
 Configuration Files:
   $0 looks for configuration in the following order:
@@ -810,42 +1375,1068 @@ Configuration Files:
   Environment variables:
     CONFIG_FILE      Path to custom configuration file
 
-  Command line arguments override configuration file settings.
-
 Environment variables:
   QUALITY_PRESET   Quality: high, medium, low (default: high)
   PARALLEL_JOBS    Number of parallel jobs (default: auto-detect CPU cores)
 
 Examples:
-  $0                                    # Use config file + defaults
-  QUALITY_PRESET=medium $0              # Override quality from config
-  PARALLEL_JOBS=4 $0                    # 4 parallel jobs
-  PARALLEL_JOBS=1 $0                    # Sequential processing
+  $0                                    # Process with config defaults
+  $0 process                            # Explicit process command
+  $0 status                             # Show current status
+  $0 config --setup-wizard              # Interactive configuration
+  $0 validate                           # Validate current setup
+  $0 help process                       # Help for specific command
+  
+  # Legacy format (still supported):
   $0 /path/to/source /path/to/output    # Override paths from config
-  CONFIG_FILE=./my-config.yml $0        # Use custom config file
+  QUALITY_PRESET=medium $0              # Override quality from config
 
-Configuration Features:
-  - Auto backup of original files
-  - File organization by date
-  - Metadata preservation
-  - File size filtering
-  - Custom FFmpeg arguments
-  - macOS notifications
-  - Verbose logging
-  - And much more...
-
-Create Config File:
-  Copy dji-config.yml to ~/.dji-processor/config.yml and customize your settings.
-
-Notes:
-  - Parallel processing speeds up conversion of multiple files
-  - Each job uses all available CPU cores
-  - For 1 file use PARALLEL_JOBS=1
-  - For multiple files we recommend 2-4 parallel jobs
-  - Configuration files use YAML format
+Run '$0 help [COMMAND]' for more information on a specific command.
 EOF
-    exit 0
-fi
+}
 
-# Run main function
-main "$@"
+# Process command (main functionality)
+command_process() {
+    # Check for process-specific help
+    if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+        show_process_help
+        exit 0
+    fi
+    
+    # Check for dry-run mode
+    local dry_run=false
+    local args=()
+    
+    # Parse arguments for dry-run flag
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    if [[ "$dry_run" == "true" ]]; then
+        # Run comprehensive validation without actual processing
+        if [[ ${#args[@]} -gt 0 ]]; then
+            validate_processing_setup "${args[@]}"
+        else
+            validate_processing_setup
+        fi
+        exit 0
+    else
+        # Run the main processing function with remaining arguments
+        if [[ ${#args[@]} -gt 0 ]]; then
+            main "${args[@]}"
+        else
+            main
+        fi
+    fi
+}
+
+# Status command
+command_status() {
+    if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+        show_status_help
+        exit 0
+    fi
+    
+    echo "🔍 DJI Processor Status"
+    echo "======================"
+    
+    # Check for running processes
+    local running_jobs
+    running_jobs=$(pgrep -f "avata2_dlog_optimized.sh" | wc -l)
+    
+    if [[ $running_jobs -gt 1 ]]; then
+        log_info "📊 Processing jobs currently running: $((running_jobs - 1))"
+        
+        # Show running job details if possible
+        if command -v ps >/dev/null 2>&1; then
+            echo ""
+            echo "Active processes:"
+            ps aux | grep "avata2_dlog_optimized.sh" | grep -v grep | grep -v "command_status"
+        fi
+    else
+        log_info "💤 No processing jobs currently running"
+    fi
+    
+    # Show configuration status
+    echo ""
+    log_info "📋 Configuration Status:"
+    if [[ -f "$CONFIG_FILE" ]]; then
+        log_success "✅ Config file found: $CONFIG_FILE"
+    elif [[ -f "$DEFAULT_CONFIG_FILE" ]]; then
+        log_success "✅ Config file found: $DEFAULT_CONFIG_FILE"
+    else
+        log_warning "⚠️  No configuration file found"
+        log_info "💡 Run './avata2_dlog_optimized.sh config --setup-wizard' to create one"
+    fi
+    
+    # Check dependencies
+    echo ""
+    log_info "🔧 Dependencies:"
+    if command -v ffmpeg >/dev/null 2>&1; then
+        log_success "✅ FFmpeg found: $(ffmpeg -version 2>/dev/null | head -n1)"
+    else
+        log_error "❌ FFmpeg not found"
+    fi
+    
+    if command -v ffprobe >/dev/null 2>&1; then
+        log_success "✅ FFprobe found"
+    else
+        log_error "❌ FFprobe not found"
+    fi
+}
+
+# Config command
+command_config() {
+    local subcommand="${1:-}"
+    
+    case "$subcommand" in
+        -h|--help)
+            show_config_help
+            exit 0
+            ;;
+        --setup-wizard)
+            interactive_config_wizard
+            exit 0
+            ;;
+        --show)
+            show_current_config
+            ;;
+        --validate)
+            validate_current_config
+            ;;
+        *)
+            log_error "Unknown config subcommand: $subcommand"
+            echo ""
+            show_config_help
+            exit 1
+            ;;
+    esac
+}
+
+# Validate command
+command_validate() {
+    if [[ "${1:-}" =~ ^(-h|--help)$ ]]; then
+        show_validate_help
+        exit 0
+    fi
+    
+    log_info "🔍 Validating DJI Processor Setup"
+    echo "================================="
+    
+    local errors=0
+    
+    # Load configuration for validation
+    apply_config
+    
+    # Validate source directory
+    if [[ -d "$SOURCE_DIR" ]]; then
+        log_success "✅ Source directory exists: $SOURCE_DIR"
+    else
+        log_error "❌ Source directory not found: $SOURCE_DIR"
+        ((errors++))
+    fi
+    
+    # Validate output directory (create if doesn't exist)
+    if [[ -d "$FINAL_DIR" ]]; then
+        log_success "✅ Output directory exists: $FINAL_DIR"
+    else
+        log_warning "⚠️  Output directory doesn't exist: $FINAL_DIR"
+        log_info "💡 Will be created automatically during processing"
+    fi
+    
+    # Validate LUT file
+    if [[ -f "$LUT_FILE" ]]; then
+        log_success "✅ LUT file found: $LUT_FILE"
+    else
+        log_error "❌ LUT file not found: $LUT_FILE"
+        ((errors++))
+    fi
+    
+    # Validate dependencies
+    check_dependencies
+    
+    # Summary
+    echo ""
+    if [[ $errors -eq 0 ]]; then
+        log_success "🎉 Validation complete - setup looks good!"
+        exit 0
+    else
+        log_error "💥 Validation failed with $errors error(s)"
+        log_info "💡 Fix the errors above and run validation again"
+        exit 1
+    fi
+}
+
+# Help command
+command_help() {
+    local topic="${1:-}"
+    
+    case "$topic" in
+        process)
+            show_process_help
+            ;;
+        status)
+            show_status_help
+            ;;
+        config)
+            show_config_help
+            ;;
+        validate)
+            show_validate_help
+            ;;
+        "")
+            show_general_help
+            ;;
+        completion)
+            show_completion_help
+            ;;
+        *)
+            log_error "No help available for: $topic"
+            echo ""
+            log_info "Available help topics: process, status, config, validate, completion"
+            exit 1
+            ;;
+    esac
+}
+
+# Completion command
+command_completion() {
+    local subcommand="${1:-}"
+    
+    case "$subcommand" in
+        -h|--help)
+            show_completion_help
+            exit 0
+            ;;
+        --install)
+            install_bash_completion
+            ;;
+        --generate)
+            generate_bash_completion
+            ;;
+        --show)
+            generate_bash_completion
+            ;;
+        "")
+            # Default action: show completion script
+            generate_bash_completion
+            ;;
+        *)
+            log_error "Unknown completion subcommand: $subcommand"
+            echo ""
+            show_completion_help
+            exit 1
+            ;;
+    esac
+}
+
+# Individual help functions
+show_process_help() {
+    cat << EOF
+Usage: $0 process [OPTIONS] [SOURCE_DIRECTORY] [OUTPUT_DIRECTORY] [LUT_FILE]
+
+Process DJI D-Log videos to Rec.709 color space.
+
+OPTIONS:
+  --dry-run          Validate configuration and setup without processing any files
+  -h, --help         Show this help message
+
+ARGUMENTS:
+  SOURCE_DIRECTORY   Directory containing D-Log video files (optional if configured)
+  OUTPUT_DIRECTORY   Directory for processed videos (optional if configured)
+  LUT_FILE          Path to LUT file (.cube format) (optional if configured)
+
+EXAMPLES:
+  $0 process                                 # Use configuration file settings
+  $0 process --dry-run                       # Validate setup without processing
+  $0 process /path/to/source                 # Override source directory
+  $0 process /source /output /lut.cube       # Override all paths
+  $0 process --dry-run /path/to/source       # Validate with custom source
+  QUALITY_PRESET=high $0 process             # Override quality setting
+
+VALIDATION:
+  The --dry-run option performs comprehensive validation including:
+  - Configuration file syntax and values
+  - Source directory existence and permissions
+  - Output directory creation and write access
+  - LUT file validity and format checking
+  - Disk space availability
+  - Dependencies and encoder availability
+  - Processing time and size estimation
+
+For more options, see the main configuration file or environment variables.
+EOF
+}
+
+show_status_help() {
+    cat << EOF
+Usage: $0 status [OPTIONS]
+
+Show current processing status and system information.
+
+OPTIONS:
+  -h, --help     Show this help message
+
+EXAMPLES:
+  $0 status      # Show current status
+EOF
+}
+
+show_config_help() {
+    cat << EOF
+Usage: $0 config [SUBCOMMAND] [OPTIONS]
+
+Manage configuration settings.
+
+SUBCOMMANDS:
+  --setup-wizard    Interactive configuration setup wizard
+  --show           Show current configuration
+  --validate       Validate current configuration
+  -h, --help       Show this help message
+
+EXAMPLES:
+  $0 config --setup-wizard    # Create new configuration interactively
+  $0 config --show           # Display current settings
+  $0 config --validate       # Check configuration validity
+
+SETUP WIZARD:
+  The interactive wizard guides you through:
+  - Source and output directory selection
+  - LUT file configuration
+  - Quality and performance settings
+  - Workflow options (backup, organization)
+  - Configuration file location choice
+  - Optional validation testing
+
+  Perfect for first-time setup or creating new configurations.
+EOF
+}
+
+show_validate_help() {
+    cat << EOF
+Usage: $0 validate [OPTIONS]
+
+Validate the current setup and configuration.
+
+Checks:
+  - Source directory exists
+  - Output directory accessibility
+  - LUT file exists
+  - Dependencies (ffmpeg, ffprobe)
+  - Configuration file validity
+
+OPTIONS:
+  -h, --help     Show this help message
+
+EXAMPLES:
+  $0 validate    # Run full validation
+EOF
+}
+
+show_completion_help() {
+    cat << EOF
+Usage: $0 completion [SUBCOMMAND] [OPTIONS]
+
+Generate and manage bash completion for the DJI processor.
+
+SUBCOMMANDS:
+  --generate     Generate completion script (default)
+  --show         Show completion script (same as --generate)
+  --install      Install completion script to system
+  -h, --help     Show this help message
+
+EXAMPLES:
+  $0 completion                    # Show completion script
+  $0 completion --generate         # Generate completion script  
+  $0 completion --install          # Install system-wide completion
+  $0 completion > /usr/local/etc/bash_completion.d/dji-processor
+
+INSTALLATION:
+  Option 1 - Automatic installation:
+    $0 completion --install
+
+  Option 2 - Manual installation:
+    $0 completion > ~/.local/share/bash-completion/completions/dji-processor
+    source ~/.local/share/bash-completion/completions/dji-processor
+
+  Option 3 - Session-only:
+    eval "\$($0 completion)"
+
+FEATURES:
+  - Command completion (process, status, config, validate, help)
+  - Option completion (--dry-run, --setup-wizard, etc.)
+  - File path completion for directories and LUT files
+  - Dynamic preset completion (high, medium, low)
+  - Context-aware suggestions
+EOF
+}
+
+# Helper functions for config command
+show_current_config() {
+    log_info "📋 Current Configuration"
+    echo "========================"
+    
+    # Load configuration
+    apply_config
+    
+    echo "Source directory: $SOURCE_DIR"
+    echo "Output directory: $FINAL_DIR"
+    echo "LUT file: $LUT_FILE"
+    echo "Quality preset: $QUALITY_PRESET"
+    echo "Parallel jobs: $PARALLEL_JOBS"
+    echo "Auto backup: $AUTO_BACKUP"
+    echo "Skip existing: $SKIP_EXISTING"
+    echo "Organize by date: $ORGANIZE_BY_DATE"
+    echo "Preserve metadata: $PRESERVE_METADATA"
+    echo "Verbose logging: $VERBOSE_LOGGING"
+}
+
+validate_current_config() {
+    log_info "🔍 Validating Configuration"
+    echo "============================"
+    
+    apply_config
+    
+    local config_file=""
+    if [[ -f "$CONFIG_FILE" ]]; then
+        config_file="$CONFIG_FILE"
+    elif [[ -f "$DEFAULT_CONFIG_FILE" ]]; then
+        config_file="$DEFAULT_CONFIG_FILE"
+    fi
+    
+    if [[ -n "$config_file" ]]; then
+        log_success "✅ Configuration file: $config_file"
+        
+        # Basic YAML syntax check
+        if command -v python3 >/dev/null 2>&1; then
+            if python3 -c "import yaml; yaml.safe_load(open('$config_file'))" 2>/dev/null; then
+                log_success "✅ Configuration syntax is valid"
+            else
+                log_error "❌ Configuration syntax error"
+            fi
+        else
+            log_info "💡 Install python3 with PyYAML for advanced config validation"
+        fi
+    else
+        log_warning "⚠️  No configuration file found - using defaults"
+    fi
+}
+
+# Interactive Configuration Wizard
+interactive_config_wizard() {
+    echo ""
+    log_info "🧙 DJI Video Processor Configuration Wizard"
+    echo "============================================="
+    echo ""
+    log_info "This wizard will help you create an optimized configuration file."
+    echo ""
+    
+    # Initialize wizard variables
+    local wizard_source_dir=""
+    local wizard_output_dir=""
+    local wizard_lut_file=""
+    local wizard_quality="medium"
+    local wizard_parallel="auto"
+    local wizard_auto_backup="false"
+    local wizard_organize_date="false"
+    local wizard_notifications="true"
+    local wizard_config_file=""
+    
+    # Helper function for user input with default
+    prompt_with_default() {
+        local prompt="$1"
+        local default="$2"
+        local validation_func="${3:-}"
+        local user_input=""
+        
+        while true; do
+            if [[ -n "$default" ]]; then
+                echo -n "$prompt [$default]: "
+            else
+                echo -n "$prompt: "
+            fi
+            read -r user_input
+            
+            # Use default if input is empty
+            if [[ -z "$user_input" ]] && [[ -n "$default" ]]; then
+                user_input="$default"
+            fi
+            
+            # Validate input if validation function provided
+            if [[ -n "$validation_func" ]]; then
+                if $validation_func "$user_input"; then
+                    echo "$user_input"
+                    return 0
+                else
+                    log_error "Invalid input. Please try again."
+                    continue
+                fi
+            else
+                echo "$user_input"
+                return 0
+            fi
+        done
+    }
+    
+    # Validation functions
+    validate_directory() {
+        local dir="$1"
+        if [[ -z "$dir" ]]; then
+            echo "Directory path cannot be empty"
+            return 1
+        fi
+        if [[ ! "$dir" =~ ^(/|~/|\\./) ]]; then
+            echo "Please provide a full path (starting with /, ~/, or ./)"
+            return 1
+        fi
+        return 0
+    }
+    
+    validate_file() {
+        local file="$1"
+        if [[ -z "$file" ]]; then
+            echo "File path cannot be empty"
+            return 1
+        fi
+        if [[ ! "$file" =~ ^(/|~/|\\./) ]]; then
+            echo "Please provide a full path (starting with /, ~/, or ./)"
+            return 1
+        fi
+        return 0
+    }
+    
+    validate_quality() {
+        local quality="$1"
+        case "$quality" in
+            high|medium|low) return 0 ;;
+            *) echo "Quality must be 'high', 'medium', or 'low'"; return 1 ;;
+        esac
+    }
+    
+    validate_parallel() {
+        local parallel="$1"
+        if [[ "$parallel" == "auto" ]]; then
+            return 0
+        elif [[ "$parallel" =~ ^[0-9]+$ ]] && [[ $parallel -ge 1 ]] && [[ $parallel -le 16 ]]; then
+            return 0
+        else
+            echo "Parallel jobs must be 'auto' or a number between 1-16"
+            return 1
+        fi
+    }
+    
+    validate_yes_no() {
+        local answer="$1"
+        case "${answer,,}" in
+            y|yes|true) echo "true"; return 0 ;;
+            n|no|false) echo "false"; return 0 ;;
+            *) echo "Please answer 'y' for yes or 'n' for no"; return 1 ;;
+        esac
+    }
+    
+    # Step 1: Source Directory
+    echo "📁 Step 1/8: Source Directory"
+    echo "Where are your DJI D-Log video files stored?"
+    echo "This directory should contain your .mp4 or .mov files from your drone."
+    echo ""
+    
+    local default_source="$HOME/Movies/DJI/source"
+    wizard_source_dir=$(prompt_with_default "Source directory" "$default_source" "validate_directory")
+    
+    # Check if source directory exists and offer to create it
+    if [[ ! -d "$wizard_source_dir" ]]; then
+        echo ""
+        log_warning "Directory doesn't exist: $wizard_source_dir"
+        local create_dir
+        create_dir=$(prompt_with_default "Create this directory? (y/n)" "y" "validate_yes_no")
+        if [[ "$create_dir" == "true" ]]; then
+            if mkdir -p "$wizard_source_dir" 2>/dev/null; then
+                log_success "✅ Created directory: $wizard_source_dir"
+            else
+                log_error "❌ Failed to create directory. Please check permissions."
+                echo "You may need to create this directory manually later."
+            fi
+        fi
+    fi
+    
+    echo ""
+    
+    # Step 2: Output Directory
+    echo "📁 Step 2/8: Output Directory"
+    echo "Where should processed videos be saved?"
+    echo ""
+    
+    local default_output="$HOME/Movies/DJI/final"
+    wizard_output_dir=$(prompt_with_default "Output directory" "$default_output" "validate_directory")
+    
+    # Check if output directory exists and offer to create it
+    if [[ ! -d "$wizard_output_dir" ]]; then
+        echo ""
+        log_warning "Directory doesn't exist: $wizard_output_dir"
+        local create_dir
+        create_dir=$(prompt_with_default "Create this directory? (y/n)" "y" "validate_yes_no")
+        if [[ "$create_dir" == "true" ]]; then
+            if mkdir -p "$wizard_output_dir" 2>/dev/null; then
+                log_success "✅ Created directory: $wizard_output_dir"
+            else
+                log_error "❌ Failed to create directory. Please check permissions."
+                echo "You may need to create this directory manually later."
+            fi
+        fi
+    fi
+    
+    echo ""
+    
+    # Step 3: LUT File
+    echo "🎨 Step 3/8: LUT File"
+    echo "Path to your DJI D-Log LUT file (.cube format)."
+    echo "This file converts your D-Log footage to standard Rec.709 color space."
+    echo ""
+    
+    local default_lut="$HOME/Movies/DJI/Avata2.cube"
+    wizard_lut_file=$(prompt_with_default "LUT file path" "$default_lut" "validate_file")
+    
+    # Check if LUT file exists
+    if [[ ! -f "$wizard_lut_file" ]]; then
+        echo ""
+        log_warning "LUT file not found: $wizard_lut_file"
+        echo "💡 You'll need to obtain a LUT file for your specific DJI drone model."
+        echo "💡 Common locations: DJI Assistant software, online DJI resources"
+    else
+        log_success "✅ LUT file found: $wizard_lut_file"
+    fi
+    
+    echo ""
+    
+    # Step 4: Quality Preset
+    echo "⚙️ Step 4/8: Quality Preset"
+    echo "Choose the video quality preset:"
+    echo "  high   = 15Mbps (best quality, larger files, good for archival)"
+    echo "  medium = 10Mbps (balanced quality/size, good for general use)"
+    echo "  low    = 6Mbps  (smaller files, good for web sharing)"
+    echo ""
+    
+    wizard_quality=$(prompt_with_default "Quality preset (high/medium/low)" "medium" "validate_quality")
+    echo ""
+    
+    # Step 5: Parallel Processing
+    echo "🚀 Step 5/8: Parallel Processing"
+    local detected_cores
+    detected_cores=$(sysctl -n hw.ncpu 2>/dev/null || echo "unknown")
+    echo "Your system has $detected_cores CPU cores."
+    echo "Parallel processing can speed up batch operations."
+    echo "  auto = automatically detect optimal number of jobs"
+    echo "  1-16 = specific number of simultaneous processing jobs"
+    echo ""
+    
+    wizard_parallel=$(prompt_with_default "Parallel jobs (auto/1-16)" "auto" "validate_parallel")
+    echo ""
+    
+    # Step 6: Auto Backup
+    echo "💾 Step 6/8: Auto Backup"
+    echo "Automatically backup original files before processing?"
+    echo "This creates a safety copy of your original footage."
+    echo ""
+    
+    local backup_answer
+    backup_answer=$(prompt_with_default "Enable auto backup? (y/n)" "n" "validate_yes_no")
+    wizard_auto_backup="$backup_answer"
+    echo ""
+    
+    # Step 7: File Organization
+    echo "📅 Step 7/8: File Organization"
+    echo "Organize processed files by date in subdirectories?"
+    echo "This creates folders like '2025-01-15' for better organization."
+    echo ""
+    
+    local organize_answer
+    organize_answer=$(prompt_with_default "Organize by date? (y/n)" "n" "validate_yes_no")
+    wizard_organize_date="$organize_answer"
+    echo ""
+    
+    # Step 8: Notifications
+    echo "🔔 Step 8/8: Notifications"
+    echo "Enable macOS notifications when processing completes?"
+    echo ""
+    
+    local notification_answer
+    notification_answer=$(prompt_with_default "Enable notifications? (y/n)" "y" "validate_yes_no")
+    wizard_notifications="$notification_answer"
+    echo ""
+    
+    # Configuration Summary
+    echo "📋 Configuration Summary"
+    echo "========================"
+    echo "Source directory: $wizard_source_dir"
+    echo "Output directory: $wizard_output_dir"
+    echo "LUT file: $wizard_lut_file"
+    echo "Quality preset: $wizard_quality"
+    echo "Parallel jobs: $wizard_parallel"
+    echo "Auto backup: $wizard_auto_backup"
+    echo "Organize by date: $wizard_organize_date"
+    echo "Notifications: $wizard_notifications"
+    echo ""
+    
+    # Confirm configuration
+    local confirm_answer
+    confirm_answer=$(prompt_with_default "Save this configuration? (y/n)" "y" "validate_yes_no")
+    
+    if [[ "$confirm_answer" == "false" ]]; then
+        log_info "Configuration wizard cancelled. No changes made."
+        return 0
+    fi
+    
+    # Choose configuration file location
+    echo ""
+    echo "💾 Configuration File Location"
+    echo "Choose where to save your configuration:"
+    echo "  1. ~/.dji-processor/config.yml (user-global, recommended)"
+    echo "  2. ./dji-config.yml (project-specific)"
+    echo "  3. Custom location"
+    echo ""
+    
+    local location_choice
+    location_choice=$(prompt_with_default "Choose location (1/2/3)" "1")
+    
+    case "$location_choice" in
+        1)
+            wizard_config_file="$HOME/.dji-processor/config.yml"
+            mkdir -p "$HOME/.dji-processor"
+            ;;
+        2)
+            wizard_config_file="./dji-config.yml"
+            ;;
+        3)
+            wizard_config_file=$(prompt_with_default "Custom config file path" "$HOME/dji-config.yml" "validate_file")
+            local config_dir
+            config_dir=$(dirname "$wizard_config_file")
+            mkdir -p "$config_dir" 2>/dev/null
+            ;;
+        *)
+            log_warning "Invalid choice, using default location"
+            wizard_config_file="$HOME/.dji-processor/config.yml"
+            mkdir -p "$HOME/.dji-processor"
+            ;;
+    esac
+    
+    # Generate configuration file
+    echo ""
+    log_info "💾 Generating configuration file..."
+    
+    cat > "$wizard_config_file" << EOF
+# DJI Avata 2 D-Log Video Processor Configuration
+# Generated by Configuration Wizard on $(date)
+
+# === PATHS ===
+source_directory: "$wizard_source_dir"
+output_directory: "$wizard_output_dir"
+lut_file: "$wizard_lut_file"
+
+# === PROCESSING SETTINGS ===
+quality_preset: "$wizard_quality"
+parallel_jobs: "$wizard_parallel"
+
+# === WORKFLOW OPTIONS ===
+auto_backup: $wizard_auto_backup
+skip_existing: true
+organize_by_date: $wizard_organize_date
+preserve_timestamps: true
+preserve_metadata: true
+
+# === NOTIFICATIONS ===
+macos_notifications: $wizard_notifications
+completion_sound: $wizard_notifications
+
+# === PERFORMANCE ===
+max_cpu_usage: 90
+thermal_protection: true
+
+# === FILE HANDLING ===
+file_extensions:
+  - "mp4"
+  - "MP4"
+  - "mov"
+  - "MOV"
+
+min_file_size: 10
+max_file_size: 0
+
+# Additional settings can be added manually
+# See examples/ directory for more configuration options
+EOF
+    
+    if [[ $? -eq 0 ]]; then
+        log_success "✅ Configuration saved to: $wizard_config_file"
+        echo ""
+        
+        # Offer to test configuration
+        local test_answer
+        test_answer=$(prompt_with_default "Test configuration with dry-run? (y/n)" "y" "validate_yes_no")
+        
+        if [[ "$test_answer" == "true" ]]; then
+            echo ""
+            log_info "🔍 Testing configuration..."
+            echo ""
+            
+            # Set the config file and run dry-run validation
+            CONFIG_FILE="$wizard_config_file" validate_processing_setup
+        else
+            echo ""
+            log_info "🎉 Configuration wizard completed successfully!"
+            echo ""
+            log_info "💡 Next steps:"
+            echo "  1. Copy your DJI D-Log video files to: $wizard_source_dir"
+            echo "  2. Ensure your LUT file is available at: $wizard_lut_file"
+            echo "  3. Run: ./avata2_dlog_optimized.sh process"
+            echo "  4. Or test first: ./avata2_dlog_optimized.sh process --dry-run"
+        fi
+    else
+        log_error "❌ Failed to save configuration file"
+        log_info "💡 Please check file permissions and try again"
+        return 1
+    fi
+}
+
+# Generate bash completion script
+generate_bash_completion() {
+    local script_name
+    script_name=$(basename "$0")
+    
+    cat << 'EOF'
+#!/bin/bash
+# Bash completion for DJI Avata 2 D-Log Processor
+# Generated automatically - do not edit manually
+
+_dji_processor_completion() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Main commands
+    local commands="process status config validate help completion"
+    
+    # Global options
+    local global_opts="-h --help"
+    
+    # Process command options
+    local process_opts="--dry-run -h --help"
+    
+    # Config command options  
+    local config_opts="--setup-wizard --show --validate -h --help"
+    
+    # Quality presets
+    local quality_presets="high medium low"
+    
+    # Get current command (first non-option argument)
+    local command=""
+    local i=1
+    while [[ $i -lt ${#COMP_WORDS[@]} ]]; do
+        local word="${COMP_WORDS[$i]}"
+        if [[ ! "$word" =~ ^- ]] && [[ "$word" != "$cur" ]]; then
+            command="$word"
+            break
+        fi
+        ((i++))
+    done
+    
+    # Handle completion based on context
+    case "$prev" in
+        # File/directory completions
+        --lut-file|lut_file)
+            COMPREPLY=($(compgen -f -X '!*.cube' -- "$cur"))
+            return 0
+            ;;
+        --source|--output|source_directory|output_directory)
+            COMPREPLY=($(compgen -d -- "$cur"))
+            return 0
+            ;;
+        --quality|quality_preset|QUALITY_PRESET)
+            COMPREPLY=($(compgen -W "$quality_presets" -- "$cur"))
+            return 0
+            ;;
+        --parallel|parallel_jobs|PARALLEL_JOBS)
+            COMPREPLY=($(compgen -W "auto 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16" -- "$cur"))
+            return 0
+            ;;
+    esac
+    
+    # Command-specific completion
+    case "$command" in
+        process)
+            case "$cur" in
+                -*)
+                    COMPREPLY=($(compgen -W "$process_opts" -- "$cur"))
+                    ;;
+                *)
+                    # Complete with directories for positional arguments
+                    COMPREPLY=($(compgen -d -- "$cur"))
+                    ;;
+            esac
+            return 0
+            ;;
+        config)
+            case "$cur" in
+                -*)
+                    COMPREPLY=($(compgen -W "$config_opts" -- "$cur"))
+                    ;;
+                *)
+                    COMPREPLY=($(compgen -W "$config_opts" -- "$cur"))
+                    ;;
+            esac
+            return 0
+            ;;
+        status|validate)
+            case "$cur" in
+                -*)
+                    COMPREPLY=($(compgen -W "-h --help" -- "$cur"))
+                    ;;
+            esac
+            return 0
+            ;;
+        help)
+            case "$cur" in
+                *)
+                    COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+                    ;;
+            esac
+            return 0
+            ;;
+        completion)
+            case "$cur" in
+                -*)
+                    COMPREPLY=($(compgen -W "--generate --show --install -h --help" -- "$cur"))
+                    ;;
+                *)
+                    COMPREPLY=($(compgen -W "--generate --show --install" -- "$cur"))
+                    ;;
+            esac
+            return 0
+            ;;
+        "")
+            # No command yet - complete with commands or global options
+            case "$cur" in
+                -*)
+                    COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
+                    ;;
+                *)
+                    # Check if it might be a directory (legacy mode)
+                    if [[ -d "$cur" ]] || [[ "$cur" =~ ^[./~] ]]; then
+                        COMPREPLY=($(compgen -d -- "$cur"))
+                    else
+                        COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+                    fi
+                    ;;
+            esac
+            return 0
+            ;;
+    esac
+    
+    # Default completion
+    case "$cur" in
+        -*)
+            COMPREPLY=($(compgen -W "$global_opts" -- "$cur"))
+            ;;
+        *)
+            COMPREPLY=($(compgen -W "$commands" -- "$cur"))
+            ;;
+    esac
+}
+
+# Register completion function
+EOF
+    
+    echo "complete -F _dji_processor_completion $script_name"
+    echo ""
+    echo "# Additional dynamic completions for environment variables"
+    echo "complete -W 'high medium low' -v QUALITY_PRESET"
+    echo "complete -W 'auto 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16' -v PARALLEL_JOBS"
+}
+
+# Install bash completion
+install_bash_completion() {
+    log_info "🔧 Installing Bash Completion"
+    echo "================================"
+    
+    local script_name
+    script_name=$(basename "$0")
+    local completion_file=""
+    local installed=false
+    
+    # Try different completion directories
+    local completion_dirs=(
+        "/usr/local/etc/bash_completion.d"
+        "/opt/homebrew/etc/bash_completion.d" 
+        "$HOME/.local/share/bash-completion/completions"
+        "$HOME/.bash_completion.d"
+    )
+    
+    for dir in "${completion_dirs[@]}"; do
+        if [[ -d "$dir" ]] || mkdir -p "$dir" 2>/dev/null; then
+            completion_file="$dir/dji-processor"
+            if generate_bash_completion > "$completion_file" 2>/dev/null; then
+                chmod +x "$completion_file" 2>/dev/null
+                log_success "✅ Completion installed to: $completion_file"
+                installed=true
+                break
+            else
+                log_warning "⚠️  Cannot write to: $dir"
+            fi
+        fi
+    done
+    
+    if [[ "$installed" == "false" ]]; then
+        log_error "❌ Could not install completion automatically"
+        echo ""
+        log_info "💡 Manual installation options:"
+        echo ""
+        echo "1. Save completion script:"
+        echo "   $0 completion > ~/.local/share/bash-completion/completions/dji-processor"
+        echo ""
+        echo "2. Source in current session:"
+        echo "   eval \"\$($0 completion)\""
+        echo ""
+        echo "3. Add to .bashrc/.bash_profile:"
+        echo "   echo 'eval \"\$($PWD/$script_name completion)\"' >> ~/.bashrc"
+        return 1
+    fi
+    
+    echo ""
+    log_info "🔄 Enabling Completion"
+    
+    # Try to source the completion immediately
+    if [[ -f "$completion_file" ]]; then
+        if source "$completion_file" 2>/dev/null; then
+            log_success "✅ Completion enabled for current session"
+        else
+            log_warning "⚠️  Completion installed but not loaded in current session"
+        fi
+    fi
+    
+    echo ""
+    log_info "💡 Next Steps:"
+    echo "1. Restart your terminal or run: source $completion_file"
+    echo "2. Test completion: type '$script_name <TAB><TAB>'"
+    echo "3. Try: '$script_name config --<TAB>' or '$script_name help <TAB>'"
+    
+    # Test if completion is working
+    echo ""
+    log_info "🧪 Testing Completion"
+    echo "Try these examples:"
+    echo "  $script_name <TAB><TAB>     # Show all commands"
+    echo "  $script_name config --<TAB>  # Show config options"
+    echo "  $script_name help <TAB>     # Show help topics"
+    echo "  QUALITY_PRESET=<TAB>        # Show quality presets"
+}
+
+# Parse and route commands
+parse_command "$@"
