@@ -633,11 +633,13 @@ validate_inputs() {
 # Parallel processing functions
 cleanup_jobs() {
     # Kill any remaining background jobs
-    for pid in "${RUNNING_JOBS[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill "$pid" 2>/dev/null || true
-        fi
-    done
+    if [[ ${#RUNNING_JOBS[@]} -gt 0 ]]; then
+        for pid in "${RUNNING_JOBS[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+            fi
+        done
+    fi
     RUNNING_JOBS=()
     JOB_FILES=()
 }
@@ -674,8 +676,18 @@ check_completed_jobs() {
         fi
     done
     
-    RUNNING_JOBS=("${new_running_jobs[@]}")
-    JOB_FILES=("${new_job_files[@]}")
+    # Handle empty arrays properly to avoid "unbound variable" error
+    if [[ ${#new_running_jobs[@]} -gt 0 ]]; then
+        RUNNING_JOBS=("${new_running_jobs[@]}")
+    else
+        RUNNING_JOBS=()
+    fi
+    
+    if [[ ${#new_job_files[@]} -gt 0 ]]; then
+        JOB_FILES=("${new_job_files[@]}")
+    else
+        JOB_FILES=()
+    fi
 }
 
 wait_for_all_jobs() {
