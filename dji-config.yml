@@ -23,7 +23,7 @@ quality_preset: "high"
 # 0 or "auto" = auto-detect CPU cores
 # 1 = sequential processing (one file at a time)
 # 2-8 = specific number of parallel jobs
-parallel_jobs: "auto"
+parallel_jobs: "1"
 
 # === ADVANCED SETTINGS ===
 # Automatically create backup of original files
