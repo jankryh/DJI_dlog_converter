@@ -211,30 +211,52 @@ setup() {
 }
 
 @test "get_quality_settings: should return correct settings for each preset" {
+    # Test with x264 encoder (default)
+    export ENCODER="libx264"
+    
     run get_quality_settings "draft"
     assert_success
-    assert_line --index 0 "28"  # CRF
-    assert_line --index 1 "ultrafast"  # Preset
+    assert_output "-crf 28 -preset ultrafast"
     
     run get_quality_settings "standard"
     assert_success
-    assert_line --index 0 "23"
-    assert_line --index 1 "medium"
+    assert_output "-crf 23 -preset medium"
     
     run get_quality_settings "high"
     assert_success
-    assert_line --index 0 "20"
-    assert_line --index 1 "slow"
+    assert_output "-crf 20 -preset slow"
     
     run get_quality_settings "professional"
     assert_success
-    assert_line --index 0 "18"
-    assert_line --index 1 "veryslow"
+    assert_output "-crf 18 -preset veryslow"
 }
 
 @test "get_quality_settings: should handle invalid quality preset" {
+    export ENCODER="libx264"
     run get_quality_settings "invalid"
-    assert_failure
+    assert_success
+    assert_output "-crf 23 -preset medium"  # returns default
+}
+
+@test "get_quality_settings: should work with VideoToolbox encoder" {
+    # Test with VideoToolbox encoder
+    export ENCODER="h264_videotoolbox"
+    
+    run get_quality_settings "draft"
+    assert_success
+    assert_output "-q:v 80 -realtime 1"
+    
+    run get_quality_settings "standard"
+    assert_success
+    assert_output "-q:v 65"
+    
+    run get_quality_settings "high"
+    assert_success
+    assert_output "-q:v 50"
+    
+    run get_quality_settings "professional"
+    assert_success
+    assert_output "-q:v 35"
 }
 
 @test "check_dependencies: should detect ffmpeg when available" {

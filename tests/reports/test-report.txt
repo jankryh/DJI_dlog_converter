@@ -1,11 +1,11 @@
 DJI Video Processor Test Report
-Generated: Mon Aug  4 22:16:58 CEST 2025
+Generated: Mon Aug  4 22:48:08 CEST 2025
 Test Type: all
-Exit Code: 1
+Exit Code: 0
 
 Test Environment:
 - BATS Version: Bats 1.12.0
 - Platform: Darwin
 - Project Root: /Users/onimalu/Movies/DJI
 
-Result: FAILED ❌
+Result: PASSED ✅

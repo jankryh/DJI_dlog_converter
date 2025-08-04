@@ -12,28 +12,47 @@ readonly _DJI_UTILS_LOADED=true
 # Quality presets for video encoding
 get_quality_settings() {
     local quality="$1"
-    case "$quality" in
-        draft)
-            echo "28"         # CRF
-            echo "ultrafast"  # Preset
-            ;;
-        standard)
-            echo "23"         # CRF
-            echo "medium"     # Preset
-            ;;
-        high)
-            echo "20"         # CRF  
-            echo "slow"       # Preset
-            ;;
-        professional)
-            echo "18"         # CRF
-            echo "veryslow"   # Preset
-            ;;
-        *)
-            echo "Error: Invalid quality preset '$quality'"
-            return 1
-            ;;
-    esac
+    local encoder="${ENCODER:-libx264}"
+    
+    # VideoToolbox uses different parameters than x264
+    if [[ "$encoder" == "h264_videotoolbox" ]]; then
+        case "$quality" in
+            draft)
+                echo "-q:v 80 -realtime 1"
+                ;;
+            standard)
+                echo "-q:v 65"
+                ;;
+            high)
+                echo "-q:v 50"  
+                ;;
+            professional)
+                echo "-q:v 35"
+                ;;
+            *)
+                echo "-q:v 65"  # default to standard
+                ;;
+        esac
+    else
+        # Standard x264/software encoding
+        case "$quality" in
+            draft)
+                echo "-crf 28 -preset ultrafast"
+                ;;
+            standard)
+                echo "-crf 23 -preset medium"
+                ;;
+            high)
+                echo "-crf 20 -preset slow"  
+                ;;
+            professional)
+                echo "-crf 18 -preset veryslow"
+                ;;
+            *)
+                echo "-crf 23 -preset medium"  # default to standard
+                ;;
+        esac
+    fi
 }
 
 # Check system dependencies
