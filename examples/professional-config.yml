@@ -7,7 +7,7 @@ output_directory: "./output"
 lut_file: "./luts/Avata2.cube"
 
 # === QUALITY SETTINGS ===
-quality_preset: "high"
+quality_preset: "professional"
 parallel_jobs: 4
 
 # === PROFESSIONAL FEATURES ===

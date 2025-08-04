@@ -8,7 +8,7 @@ lut_file: "./luts/Avata2.cube"
 
 # === LIGHTWEIGHT SETTINGS ===
 # Lower quality for web sharing
-quality_preset: "medium"
+quality_preset: "draft"
 
 # Reduced parallel jobs to minimize system impact
 parallel_jobs: 2

@@ -66,6 +66,9 @@ setup() {
 }
 
 @test "validate_directory: should reject file as directory" {
+    # Ensure temp directory exists
+    mkdir -p "$TEMP_TEST_DIR"
+    
     # Create test file
     touch "$TEMP_TEST_DIR/test_file"
     
@@ -74,6 +77,9 @@ setup() {
 }
 
 @test "validate_file: should accept existing file" {
+    # Ensure temp directory exists
+    mkdir -p "$TEMP_TEST_DIR"
+    
     # Create test file
     touch "$TEMP_TEST_DIR/test_file.txt"
     

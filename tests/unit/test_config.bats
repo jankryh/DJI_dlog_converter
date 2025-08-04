@@ -9,6 +9,11 @@ setup() {
     # Load common test setup
     source "tests/test_helper/test_helper.bash"
     
+    # Disable file logging and timestamps for tests
+    export DJI_LOG_FILE=""
+    export ENABLE_FILE_LOGGING="false"
+    export DJI_LOG_TIMESTAMPS="false"
+    
     # Source the required modules
     source_module "lib/core/logging.sh"
     source_module "lib/core/utils.sh"
@@ -20,23 +25,25 @@ setup() {
 
 @test "parse_config_value: should extract simple values" {
     # Create test config with simple key-value pairs
-    cat > "$TEST_CONFIG" << 'EOF'
+    local test_config="$TEMP_TEST_DIR/test-simple.yml"
+    mkdir -p "$TEMP_TEST_DIR"
+    cat > "$test_config" << 'EOF'
 quality_preset: "standard"
 parallel_jobs: "auto"
 auto_backup: false
 EOF
 
-    run parse_config_value "$TEST_CONFIG" "quality_preset"
+    run parse_config_value "quality_preset" "$test_config"
     assert_success
     assert_output "standard"
     
-    run parse_config_value "$TEST_CONFIG" "parallel_jobs"
+    run parse_config_value "parallel_jobs" "$test_config"
     assert_success
     assert_output "auto"
 }
 
 @test "parse_config_value: should handle missing keys" {
-    run parse_config_value "$TEST_CONFIG" "nonexistent_key"
+    run parse_config_value "nonexistent_key" "$TEST_CONFIG"
     assert_success
     assert_output ""
 }
@@ -49,15 +56,15 @@ number_value: 42
 boolean_value: true
 EOF
 
-    run parse_config_value "$TEST_CONFIG" "quoted_value"
+    run parse_config_value "quoted_value" "$TEST_CONFIG"
     assert_success
     assert_output "hello world"
     
-    run parse_config_value "$TEST_CONFIG" "unquoted_value"
+    run parse_config_value "unquoted_value" "$TEST_CONFIG"
     assert_success
     assert_output "hello"
     
-    run parse_config_value "$TEST_CONFIG" "number_value"
+    run parse_config_value "number_value" "$TEST_CONFIG"
     assert_success
     assert_output "42"
 }
@@ -71,25 +78,25 @@ bool_no: no
 bool_quoted_true: "true"
 EOF
 
-    run parse_config_bool "$TEST_CONFIG" "bool_true"
+    run parse_config_bool "bool_true" "$TEST_CONFIG"
     assert_success
     assert_output "true"
     
-    run parse_config_bool "$TEST_CONFIG" "bool_false"
+    run parse_config_bool "bool_false" "$TEST_CONFIG"
     assert_success
     assert_output "false"
     
-    run parse_config_bool "$TEST_CONFIG" "bool_yes"
+    run parse_config_bool "bool_yes" "$TEST_CONFIG"
     assert_success
     assert_output "true"
     
-    run parse_config_bool "$TEST_CONFIG" "bool_no"
+    run parse_config_bool "bool_no" "$TEST_CONFIG"
     assert_success
     assert_output "false"
 }
 
 @test "parse_config_bool: should handle missing boolean keys" {
-    run parse_config_bool "$TEST_CONFIG" "nonexistent_bool"
+    run parse_config_bool "nonexistent_bool" "$TEST_CONFIG"
     assert_success
     assert_output "false"
 }
@@ -152,7 +159,7 @@ EOF
     
     # Check content contains expected keys
     assert_file_contains "$default_config" "source_directory:"
-    assert_file_contains "$default_config" "final_directory:"
+    assert_file_contains "$default_config" "output_directory:"
     assert_file_contains "$default_config" "lut_file:"
 }
 

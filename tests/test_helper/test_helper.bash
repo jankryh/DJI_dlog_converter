@@ -12,18 +12,26 @@ load "$SCRIPT_DIR/bats-file/load"
 
 # Test directory paths
 TEST_DIR="$BATS_TEST_DIRNAME"
-PROJECT_ROOT="$TEST_DIR/.."
+PROJECT_ROOT="$(cd "$TEST_DIR/.." && pwd)"
 LIB_DIR="$PROJECT_ROOT/lib"
 BIN_DIR="$PROJECT_ROOT/bin"
 
-# Test data directories
-TEST_DATA_DIR="$TEST_DIR/data"
-TEMP_TEST_DIR="$TEST_DIR/tmp"
+# Test data directories (use absolute paths)
+TEST_DATA_DIR="$(cd "$TEST_DIR" && pwd)/data"
+TEMP_TEST_DIR="$(cd "$TEST_DIR" && pwd)/tmp"
+TEST_CONFIG="$TEMP_TEST_DIR/test-config.yml"
 
 # Setup function - runs before each test
 setup() {
-    # Create temporary test directory
+    # Ensure we have absolute paths for temp directory
+    local test_dir_abs
+    test_dir_abs="$(cd "$BATS_TEST_DIRNAME" && pwd)"
+    TEMP_TEST_DIR="$test_dir_abs/tmp"
+    
+    # Create temporary test directory with absolute path
     mkdir -p "$TEMP_TEST_DIR"
+    
+    # TEST_CONFIG is already set globally
     
     # Change to project root for consistent paths
     cd "$PROJECT_ROOT"
@@ -31,9 +39,6 @@ setup() {
     # Export required environment variables
     export LIB_DIR="$LIB_DIR"
     export SCRIPT_DIR="$PROJECT_ROOT"
-    
-    # Create test config for isolated testing
-    export TEST_CONFIG="$TEMP_TEST_DIR/test-config.yml"
     
     # Prevent actual file operations during tests
     export DJI_TEST_MODE="true"
@@ -52,7 +57,17 @@ teardown() {
 
 # Helper function: Create test configuration
 create_test_config() {
-    local config_file="${1:-$TEST_CONFIG}"
+    local config_file="${1:-}"
+    
+    # If no file specified, create in temp directory
+    if [[ -z "$config_file" ]]; then
+        local test_dir_abs
+        test_dir_abs="$(cd "$BATS_TEST_DIRNAME" && pwd)"
+        config_file="$test_dir_abs/tmp/test-config.yml"
+    fi
+    
+    # Ensure directory exists for config file
+    mkdir -p "$(dirname "$config_file")"
     
     cat > "$config_file" << 'EOF'
 # Test configuration for DJI Video Processor

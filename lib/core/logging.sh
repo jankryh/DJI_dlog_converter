@@ -11,6 +11,7 @@ readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
+readonly CYAN='\033[0;36m'
 readonly NC='\033[0m' # No Color
 
 # Global logging configuration
@@ -182,7 +183,38 @@ cleanup_logging() {
     log_debug "Logging system cleanup completed"
 }
 
+# Verbose logging function
+log_verbose() {
+    [[ "${VERBOSE_LOGGING:-false}" == "true" ]] || return 0
+    _log "VERBOSE" "$CYAN" "🔍" "$1"
+}
+
+# Progress display function
+show_progress() {
+    local current="$1"
+    local total="$2"
+    local message="$3"
+    
+    local percentage=$((current * 100 / total))
+    local bar_length=20
+    local filled=$((current * bar_length / total))
+    local bar=""
+    
+    for ((i=0; i<filled; i++)); do
+        bar+="█"
+    done
+    for ((i=filled; i<bar_length; i++)); do
+        bar+="░"
+    done
+    
+    printf "\r%s [%s] %d/%d (%d%%)" "$message" "$bar" "$current" "$total" "$percentage"
+    
+    if [[ $current -eq $total ]]; then
+        echo ""  # New line when complete
+    fi
+}
+
 # Export functions for use in other modules
-export -f log_debug log_info log_success log_warning log_error
-export -f handle_error log_progress log_progress_done
+export -f log_debug log_info log_success log_warning log_error log_verbose show_progress
+export -f handle_error log_progress log_progress_done  
 export -f init_logging cleanup_logging

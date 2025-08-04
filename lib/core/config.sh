@@ -23,7 +23,7 @@ init_default_config() {
     
     # Processing settings
     BAR_LENGTH="${BAR_LENGTH:-50}"
-    QUALITY_PRESET="${QUALITY_PRESET:-high}"
+    QUALITY_PRESET="${QUALITY_PRESET:-standard}"
     PARALLEL_JOBS="${PARALLEL_JOBS:-auto}"
     
     # Backup and organization
@@ -238,8 +238,8 @@ apply_config() {
     fi
     
     case "$QUALITY_PRESET" in
-        high|medium|low) ;;
-        *) log_error "Invalid QUALITY_PRESET value: $QUALITY_PRESET (must be 'high', 'medium', or 'low')"; return 1 ;;
+        draft|standard|high|professional) ;;
+        *) log_error "Invalid QUALITY_PRESET value: $QUALITY_PRESET (must be 'draft', 'standard', 'high', or 'professional')"; return 1 ;;
     esac
     
     # Re-export all configuration
@@ -301,7 +301,7 @@ output_directory: "./output"
 lut_file: "./luts/Avata2.cube"
 
 # Processing Settings
-quality_preset: "high"           # high, medium, low
+quality_preset: "standard"       # draft, standard, high, professional
 parallel_jobs: "auto"            # auto, 1-32, or specific number
 
 # Backup & Organization

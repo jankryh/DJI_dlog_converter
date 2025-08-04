@@ -13,10 +13,26 @@ readonly _DJI_UTILS_LOADED=true
 get_quality_settings() {
     local quality="$1"
     case "$quality" in
-        high)   echo "-b:v 15M -maxrate 18M -bufsize 30M" ;;
-        medium) echo "-b:v 10M -maxrate 12M -bufsize 20M" ;;
-        low)    echo "-b:v 6M -maxrate 8M -bufsize 12M" ;;
-        *)      echo "-b:v 10M -maxrate 12M -bufsize 20M" ;;  # default to medium
+        draft)
+            echo "28"         # CRF
+            echo "ultrafast"  # Preset
+            ;;
+        standard)
+            echo "23"         # CRF
+            echo "medium"     # Preset
+            ;;
+        high)
+            echo "20"         # CRF  
+            echo "slow"       # Preset
+            ;;
+        professional)
+            echo "18"         # CRF
+            echo "veryslow"   # Preset
+            ;;
+        *)
+            echo "Error: Invalid quality preset '$quality'"
+            return 1
+            ;;
     esac
 }
 
@@ -71,8 +87,8 @@ validate_directory() {
         echo "Directory path cannot be empty"
         return 1
     fi
-    if [[ ! "$dir" =~ ^(/|~/|\\./) ]]; then
-        echo "Please provide a full path (starting with /, ~/, or ./)"
+    if [[ ! -d "$dir" ]]; then
+        echo "Directory does not exist: $dir"
         return 1
     fi
     return 0
@@ -84,8 +100,8 @@ validate_file() {
         echo "File path cannot be empty"
         return 1
     fi
-    if [[ ! "$file" =~ ^(/|~/|\\./) ]]; then
-        echo "Please provide a full path (starting with /, ~/, or ./)"
+    if [[ ! -f "$file" ]]; then
+        echo "File does not exist: $file"
         return 1
     fi
     return 0
@@ -94,8 +110,8 @@ validate_file() {
 validate_quality() {
     local quality="$1"
     case "$quality" in
-        high|medium|low) return 0 ;;
-        *) echo "Quality must be 'high', 'medium', or 'low'"; return 1 ;;
+        draft|standard|high|professional) return 0 ;;
+        *) echo "Quality must be 'draft', 'standard', 'high', or 'professional'"; return 1 ;;
     esac
 }
 
@@ -111,9 +127,16 @@ validate_parallel() {
     fi
 }
 
+# Helper function to convert to lowercase (bash 3.2 compatible)
+_to_lowercase() {
+    echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
 validate_yes_no() {
     local answer="$1"
-    case "${answer,,}" in
+    local lower_answer
+    lower_answer=$(_to_lowercase "$answer")
+    case "$lower_answer" in
         y|yes|true) echo "true"; return 0 ;;
         n|no|false) echo "false"; return 0 ;;
         *) echo "Please answer 'y' for yes or 'n' for no"; return 1 ;;
@@ -192,28 +215,43 @@ format_file_size() {
     local size_bytes="$1"
     
     if [[ $size_bytes -ge 1073741824 ]]; then
-        printf "%.1fGB" "$((size_bytes * 10 / 1073741824))e-1"
+        printf "%.1fG" "$((size_bytes * 10 / 1073741824))e-1"
     elif [[ $size_bytes -ge 1048576 ]]; then
-        printf "%.1fMB" "$((size_bytes * 10 / 1048576))e-1"
+        printf "%.1fM" "$((size_bytes * 10 / 1048576))e-1"
     elif [[ $size_bytes -ge 1024 ]]; then
-        printf "%.1fKB" "$((size_bytes * 10 / 1024))e-1"
+        printf "%.1fK" "$((size_bytes * 10 / 1024))e-1"
     else
         printf "%dB" "$size_bytes"
     fi
 }
 
-# Format duration in HH:MM:SS format
+# Format duration in human readable format
 format_duration() {
     local seconds="$1"
     local hours=$((seconds / 3600))
     local minutes=$(((seconds % 3600) / 60))
     local secs=$((seconds % 60))
     
+    local result=""
+    
     if [[ $hours -gt 0 ]]; then
-        printf "%02d:%02d:%02d" "$hours" "$minutes" "$secs"
+        result="${hours}h"
+        if [[ $minutes -gt 0 ]]; then
+            result="$result ${minutes}m"
+        fi
+        if [[ $secs -gt 0 ]]; then
+            result="$result ${secs}s"
+        fi
+    elif [[ $minutes -gt 0 ]]; then
+        result="${minutes}m"
+        if [[ $secs -gt 0 ]]; then
+            result="$result ${secs}s"
+        fi
     else
-        printf "%02d:%02d" "$minutes" "$secs"
+        result="${secs}s"
     fi
+    
+    echo "$result"
 }
 
 # Detect platform (macOS or Linux)

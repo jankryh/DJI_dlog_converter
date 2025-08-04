@@ -6,8 +6,8 @@ source_directory: "./input"
 output_directory: "./output"
 lut_file: "./luts/Avata2.cube"
 
-# Video quality: high, medium, low
-quality_preset: "high"
+# Video quality: draft, standard, high, professional
+quality_preset: "standard"
 
 # Parallel jobs: auto, or number (1-8)
 parallel_jobs: "auto"
