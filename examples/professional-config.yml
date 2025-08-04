@@ -2,9 +2,9 @@
 # High-end settings for professional video production
 
 # === PATHS ===
-source_directory: "/Users/username/Videos/DJI/RAW"
-output_directory: "/Users/username/Videos/DJI/Processed"
-lut_file: "/Users/username/Videos/DJI/Professional-Avata2.cube"
+source_directory: "./input"
+output_directory: "./output"
+lut_file: "./luts/Avata2.cube"
 
 # === QUALITY SETTINGS ===
 quality_preset: "high"
@@ -13,7 +13,7 @@ parallel_jobs: 4
 # === PROFESSIONAL FEATURES ===
 # Backup originals before processing
 auto_backup: true
-backup_directory: "/Users/username/Videos/DJI/Backup"
+backup_directory: "./backup"
 
 # Organize output by shoot date
 organize_by_date: true

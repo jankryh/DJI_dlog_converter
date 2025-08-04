@@ -1,0 +1,474 @@
+#!/usr/bin/env bash
+# DJI Video Processor - Modern Modular Shell Script
+# Processes DJI D-Log video files using hardware acceleration and LUT
+# Professional-grade CLI tool with modular architecture
+
+set -euo pipefail  # Exit on error, undefined vars, pipe failures
+
+# Script metadata
+readonly SCRIPT_VERSION="2.0.0"
+readonly SCRIPT_NAME="DJI Video Processor"
+# Handle both direct execution and symlink execution
+if [[ -L "${BASH_SOURCE[0]}" ]]; then
+    # Follow symlink to get actual script location
+    SCRIPT_PATH="$(readlink "${BASH_SOURCE[0]}")"
+    # If relative symlink, make it absolute from current directory
+    [[ "$SCRIPT_PATH" =~ ^/ ]] || SCRIPT_PATH="$(pwd)/$SCRIPT_PATH"
+else
+    SCRIPT_PATH="${BASH_SOURCE[0]}"
+fi
+readonly SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+readonly LIB_DIR="$(dirname "$SCRIPT_DIR")/lib"
+
+# Source core modules
+source "$LIB_DIR/core/logging.sh"
+source "$LIB_DIR/core/utils.sh"
+source "$LIB_DIR/core/config.sh"
+
+# Source processing modules
+source "$LIB_DIR/processing/video.sh"
+source "$LIB_DIR/processing/parallel.sh"
+
+# Initialize logging and configuration
+init_logging
+init_default_config
+
+# Command parsing and routing
+show_version() {
+    echo "$SCRIPT_NAME v$SCRIPT_VERSION"
+    echo "Professional DJI D-Log to Rec.709 video processor"
+}
+
+show_help() {
+    cat << EOF
+$SCRIPT_NAME v$SCRIPT_VERSION
+
+USAGE:
+    $0 [COMMAND] [OPTIONS]
+
+COMMANDS:
+    process                 Process video files (default action)
+    validate               Validate configuration and setup
+    config                 Manage configuration
+    status                 Show processing status
+    help                   Show this help message
+    version                Show version information
+
+PROCESS OPTIONS:
+    --dry-run              Validate setup without processing
+    --source DIR           Source directory path
+    --output DIR           Output directory path
+    --lut FILE             LUT file path
+    --quality PRESET       Quality preset (high|medium|low)
+    --parallel JOBS        Parallel jobs (auto|1-32)
+    --sequential           Force sequential processing (1 job)
+    --verbose              Enable verbose logging
+
+CONFIG OPTIONS:
+    config create          Create default configuration file
+    config validate        Validate current configuration
+    config show            Show current configuration
+    config setup           Interactive configuration wizard
+
+EXAMPLES:
+    $0                     Process videos with default settings
+    $0 process --dry-run   Validate setup without processing
+    $0 config create       Create default configuration
+    $0 validate            Check system and configuration
+
+For detailed documentation, see: README.md
+EOF
+}
+
+# Main command router
+main() {
+    local command="${1:-process}"
+    
+    case "$command" in
+        process|"")
+            shift || true
+            process_videos "$@"
+            ;;
+        validate|val)
+            shift || true
+            validate_setup "$@"
+            ;;
+        config|cfg)
+            shift || true
+            manage_config "$@"
+            ;;
+        status)
+            shift || true
+            show_status "$@"
+            ;;
+        help|--help|-h)
+            show_help
+            ;;
+        version|--version|-v)
+            show_version
+            ;;
+        *)
+            log_error "Unknown command: $command"
+            echo "Use '$0 help' for usage information."
+            exit 1
+            ;;
+    esac
+}
+
+# Load processing modules dynamically when needed
+load_processing_modules() {
+    [[ "${_DJI_PROCESSING_LOADED:-}" == "true" ]] && return 0
+    
+    source "$LIB_DIR/processing/video.sh"
+    source "$LIB_DIR/processing/parallel.sh"
+    source "$LIB_DIR/system/filesystem.sh"
+    
+    readonly _DJI_PROCESSING_LOADED=true
+}
+
+# Process videos command
+process_videos() {
+    load_processing_modules
+    
+    local dry_run=false
+    
+    # Parse process-specific arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run)
+                dry_run=true
+                shift
+                ;;
+            --source)
+                SOURCE_DIR="$2"
+                shift 2
+                ;;
+            --output)
+                FINAL_DIR="$2"
+                shift 2
+                ;;
+            --lut)
+                LUT_FILE="$2"
+                shift 2
+                ;;
+            --quality)
+                QUALITY_PRESET="$2"
+                shift 2
+                ;;
+            --parallel)
+                if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+                    PARALLEL_JOBS="$2"
+                    echo "🔧 Parallel jobs set to: $PARALLEL_JOBS"
+                    shift 2
+                else
+                    echo "❌ Invalid parallel jobs value. Must be a number." >&2
+                    exit 1
+                fi
+                ;;
+            --sequential)
+                PARALLEL_JOBS=1
+                echo "🔧 Sequential processing mode enabled"
+                shift
+                ;;
+            --verbose)
+                VERBOSE_LOGGING="true"
+                shift
+                ;;
+            *)
+                echo "❌ Unknown option: $1" >&2
+                exit 1
+                ;;
+        esac
+    done
+    
+    if [[ "$dry_run" == "true" ]]; then
+        validate_processing_setup
+    else
+        start_video_processing
+    fi
+}
+
+# Validate setup command
+validate_setup() {
+    echo "🔍 Validating DJI Processor Setup"
+    echo "=================================="
+    echo ""
+    
+    echo "Checking dependencies..."
+    if check_dependencies; then
+        echo "✅ Dependencies check passed"
+    else
+        echo "❌ Dependencies check failed"
+        echo "💡 Install missing dependencies and try again"
+        return 1
+    fi
+    
+    echo ""
+    echo "Checking configuration..."
+    if validate_config; then
+        echo "✅ Configuration check passed"  
+    else
+        echo "❌ Configuration check failed"
+        echo "💡 Fix configuration issues and try again"
+        return 1
+    fi
+    
+    echo ""
+    echo "✅ All validation checks passed!"
+    echo "Ready to process videos."
+}
+
+# Configuration management command
+manage_config() {
+    local action="${1:-show}"
+    
+    case "$action" in
+        create)
+            create_default_config
+            ;;
+        validate)
+            validate_config
+            ;;
+        show)
+            show_current_config
+            ;;
+        setup)
+            # Load interactive module
+            source "$LIB_DIR/interface/interactive.sh"
+            run_interactive_setup
+            ;;
+        *)
+            log_error "Unknown config action: $action"
+            echo "Available actions: create, validate, show, setup"
+            exit 1
+            ;;
+    esac
+}
+
+# Show current configuration
+show_current_config() {
+    echo "Current Configuration:"
+    echo "====================="
+    echo "Source Directory: $SOURCE_DIR"
+    echo "Output Directory: $FINAL_DIR"
+    echo "LUT File: $LUT_FILE"
+    echo "Quality Preset: $QUALITY_PRESET"
+    echo "Parallel Jobs: $PARALLEL_JOBS"
+    echo "Auto Backup: $AUTO_BACKUP"
+    echo "Skip Existing: $SKIP_EXISTING"
+    echo "Verbose Logging: $VERBOSE_LOGGING"
+}
+
+# Show processing status
+show_status() {
+    echo "DJI Processor Status:"
+    echo "===================="
+    echo "Version: $SCRIPT_VERSION"
+    echo "Platform: $(detect_platform)"
+    echo "CPU Cores: $(get_cpu_cores)"
+    echo "Hardware Acceleration: $(check_hardware_acceleration)"
+    
+    if command -v ffmpeg >/dev/null 2>&1; then
+        local ffmpeg_version
+        ffmpeg_version=$(ffmpeg -version 2>/dev/null | head -n1 | grep -o 'version [0-9.]*' | cut -d' ' -f2)
+        echo "FFmpeg Version: $ffmpeg_version"
+    else
+        echo "FFmpeg: Not installed"
+    fi
+}
+
+# Start video processing
+start_video_processing() {
+    log_info "🚀 $SCRIPT_NAME v$SCRIPT_VERSION"
+    log_info "Source directory: $SOURCE_DIR"
+    log_info "Output directory: $FINAL_DIR"
+    log_info "LUT file: $LUT_FILE"
+    log_info "Quality: $QUALITY_PRESET"
+    log_info "Parallel jobs: $PARALLEL_JOBS"
+    
+    # Initialize video processing system
+    init_video_processing
+    
+    # Validate setup
+    if ! validate_config; then
+        log_error "Configuration validation failed"
+        return 1
+    fi
+    
+    if ! check_dependencies; then
+        log_error "Dependencies check failed"
+        return 1
+    fi
+    
+    # Create necessary directories
+    mkdir -p "$FINAL_DIR"
+    
+    # Create backup directory if needed
+    if [[ "$AUTO_BACKUP" == "true" ]]; then
+        mkdir -p "$BACKUP_DIR"
+        log_info "💾 Auto backup enabled: $BACKUP_DIR"
+    fi
+    
+    # Find video files
+    log_info "🔍 Searching for video files in: $SOURCE_DIR"
+    local video_files=()
+    while IFS= read -r -d '' file; do
+        video_files+=("$file")
+    done < <(find_video_files "$SOURCE_DIR" | tr '\n' '\0')
+    
+    local total=${#video_files[@]}
+    
+    if [[ $total -eq 0 ]]; then
+        log_warning "No video files found in: $SOURCE_DIR"
+        log_info "💡 Supported formats: MP4, MOV, AVI"
+        log_info "💡 Check your source directory path: $SOURCE_DIR"
+        exit 0
+    fi
+    
+    log_info "Found $total files to process"
+    
+    # Initialize counters
+    local processed_count=0
+    local failed_count=0
+    local skipped_count=0
+    
+    # Record total processing start time
+    local total_start_time
+    total_start_time=$(date +%s)
+    
+    # Choose processing mode based on PARALLEL_JOBS setting
+    if [[ "$PARALLEL_JOBS" -eq 1 ]]; then
+        # Sequential processing
+        log_info "🔄 Sequential processing (1 file at a time)"
+        
+        for i in "${!video_files[@]}"; do
+            local input_file="${video_files[$i]}"
+            log_info "📁 File $((i+1))/$total: $(basename "$input_file")"
+            
+            if process_video_file "$input_file"; then
+                ((processed_count++))
+            else
+                local result_code=$?
+                case $result_code in
+                    2) ((skipped_count++)) ;;
+                    *) ((failed_count++)) ;;
+                esac
+            fi
+            
+            echo ""  # Add space between files
+        done
+    else
+        # Parallel processing
+        if process_files_parallel "${video_files[@]}"; then
+            # Get final counts from parallel processing
+            processed_count=$PROCESSED_COUNT
+            failed_count=$FAILED_COUNT
+            skipped_count=$SKIPPED_COUNT
+        else
+            log_warning "Parallel processing completed with some errors"
+            processed_count=$PROCESSED_COUNT
+            failed_count=$FAILED_COUNT
+            skipped_count=$SKIPPED_COUNT
+        fi
+    fi
+    
+    # Calculate total processing time
+    local total_end_time
+    total_end_time=$(date +%s)
+    local total_processing_time=$((total_end_time - total_start_time))
+    local total_min=$((total_processing_time / 60))
+    local total_sec=$((total_processing_time % 60))
+    
+    # Summary
+    echo ""
+    log_info "📊 Processing Summary"
+    echo "====================="
+    echo "Total files found: $total"
+    echo "Successfully processed: $processed_count"
+    [[ $skipped_count -gt 0 ]] && echo "Skipped: $skipped_count"
+    [[ $failed_count -gt 0 ]] && echo "Failed: $failed_count"
+    echo "Total time: $(printf "%02d:%02d" "$total_min" "$total_sec")"
+    
+    if [[ $failed_count -gt 0 ]]; then
+        echo ""
+        log_warning "⚠️ Some files failed to process"
+        log_info "💡 Check the error messages above for troubleshooting tips"
+        log_info "💡 Try running with --verbose for more detailed output"
+        exit 1
+    elif [[ $processed_count -gt 0 ]]; then
+        echo ""
+        log_success "🎉 All files processed successfully!"
+        
+        # Show output location
+        log_info "📁 Processed videos saved to: $FINAL_DIR"
+        
+        # macOS notification if enabled
+        if [[ "$MACOS_NOTIFICATIONS" == "true" ]] && command -v osascript >/dev/null 2>&1; then
+            osascript -e "display notification \"Processed $processed_count video files\" with title \"DJI Processor Complete\"" 2>/dev/null || true
+        fi
+        
+        # Completion sound if enabled
+        if [[ "$COMPLETION_SOUND" == "true" ]] && command -v afplay >/dev/null 2>&1; then
+            afplay /System/Library/Sounds/Ping.aiff 2>/dev/null || true
+        fi
+    else
+        echo ""
+        log_info "ℹ️ No files needed processing"
+        log_info "💡 All files may have been skipped (already processed, wrong size, etc.)"
+    fi
+    
+    # Cleanup parallel processing resources
+    cleanup_parallel_processing
+}
+
+# Validation setup for dry-run mode
+validate_processing_setup() {
+    echo "🔍 Comprehensive Processing Validation (Dry Run)"
+    echo "================================================="
+    echo ""
+    
+    # Call the same validation as validate command
+    validate_setup
+    
+    echo ""
+    echo "🔍 Checking video files..."
+    
+    local video_files=()
+    while IFS= read -r -d '' file; do
+        video_files+=("$file")
+    done < <(find_video_files "$SOURCE_DIR" | tr '\n' '\0')
+    local total=${#video_files[@]}
+    
+    if [[ $total -eq 0 ]]; then
+        echo "⚠️ No video files found in: $SOURCE_DIR"
+        echo "💡 Supported formats: MP4, MOV, AVI"
+        echo "💡 Check your source directory path"
+        return 1
+    else
+        echo "✅ Found $total video file(s) to process"
+        for file in "${video_files[@]}"; do
+            echo "   - $(basename "$file")"
+        done
+    fi
+    
+    echo ""
+    echo "🎉 Dry run validation completed successfully!"
+    echo "💡 Run without --dry-run to start processing"
+}
+
+# Error handling for the main script  
+# trap 'handle_error "SCRIPT_ERROR" "Unexpected error in main script at line $LINENO"' ERR
+
+# Cleanup handler for parallel jobs
+cleanup_on_exit() {
+    # Only cleanup if parallel processing was initialized
+    if command -v cleanup_parallel_processing >/dev/null 2>&1; then
+        cleanup_parallel_processing
+    fi
+}
+
+# Set up cleanup trap
+trap cleanup_on_exit EXIT INT TERM
+
+# Main execution
+main "$@"

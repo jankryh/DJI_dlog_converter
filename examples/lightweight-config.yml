@@ -2,9 +2,9 @@
 # Optimized for low system impact and web sharing
 
 # === PATHS ===
-source_directory: "/Users/username/Movies/DJI/source"
-output_directory: "/Users/username/Movies/DJI/web"
-lut_file: "/Users/username/Movies/DJI/Avata2.cube"
+source_directory: "./input"
+output_directory: "./output"
+lut_file: "./luts/Avata2.cube"
 
 # === LIGHTWEIGHT SETTINGS ===
 # Lower quality for web sharing
