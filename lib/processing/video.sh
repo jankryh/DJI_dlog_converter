@@ -27,20 +27,20 @@ init_video_processing() {
         videotoolbox)
             HWACCEL="-hwaccel videotoolbox"
             ENCODER="h264_videotoolbox"
-            log_info "✅ Hardware acceleration (VideoToolbox) available"
+            echo "✅ Hardware acceleration (VideoToolbox) available"
             ;;
         vaapi)
             HWACCEL="-hwaccel vaapi"
             ENCODER="h264_vaapi"
-            log_info "✅ Hardware acceleration (VAAPI) available"
+            echo "✅ Hardware acceleration (VAAPI) available"
             ;;
         nvenc)
             ENCODER="h264_nvenc"
-            log_info "✅ Hardware acceleration (NVENC) available"
+            echo "✅ Hardware acceleration (NVENC) available"
             ;;
         *)
-            log_warning "Hardware acceleration not available, falling back to software encoding"
-            log_info "💡 Software encoding will be slower but still functional"
+            echo "⚠️  Hardware acceleration not available, falling back to software encoding"
+            echo "💡 Software encoding will be slower but still functional"
             ;;
     esac
 }
@@ -349,7 +349,7 @@ find_video_files() {
             elif [[ "$line" =~ ^[[:space:]]*-[[:space:]]*([^\"[:space:]#]+)$ ]]; then
                 extensions+=("${BASH_REMATCH[1]}")
             fi
-        done < <(sed -n '/^file_extensions:/,/^[[:alpha:]]/p' "$config_to_use" | tail -n +2)
+        done < <(awk '/^file_extensions:/{flag=1;next} /^[[:alpha:]]/{flag=0} flag' "$config_to_use")
     fi
     
     # Build and execute find command

@@ -2,9 +2,9 @@
 # Auto-generated configuration file
 
 # Core Settings
-source_directory: "/Users/$(whoami)/Movies/DJI/source"
-output_directory: "/Users/$(whoami)/Movies/DJI/final"
-lut_file: "/Users/$(whoami)/Movies/DJI/Avata2.cube"
+source_directory: "./input"
+output_directory: "./output"
+lut_file: "./luts/Avata2.cube"
 
 # Processing Settings
 quality_preset: "high"           # high, medium, low
@@ -12,7 +12,7 @@ parallel_jobs: "auto"            # auto, 1-32, or specific number
 
 # Backup & Organization
 auto_backup: false
-backup_directory: "/Users/$(whoami)/Movies/DJI/backup"
+backup_directory: "./backup"
 skip_existing: true
 organize_by_date: false
 date_format: "%Y-%m-%d"

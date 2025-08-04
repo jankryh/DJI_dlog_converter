@@ -279,24 +279,24 @@ show_status() {
 
 # Start video processing
 start_video_processing() {
-    log_info "🚀 $SCRIPT_NAME v$SCRIPT_VERSION"
-    log_info "Source directory: $SOURCE_DIR"
-    log_info "Output directory: $FINAL_DIR"
-    log_info "LUT file: $LUT_FILE"
-    log_info "Quality: $QUALITY_PRESET"
-    log_info "Parallel jobs: $PARALLEL_JOBS"
+    echo "🚀 DJI Video Processor v2.0.0"
+    echo "Source directory: $SOURCE_DIR"
+    echo "Output directory: $FINAL_DIR"
+    echo "LUT file: $LUT_FILE"
+    echo "Quality: $QUALITY_PRESET"
+    echo "Parallel jobs: $PARALLEL_JOBS"
     
     # Initialize video processing system
     init_video_processing
     
     # Validate setup
     if ! validate_config; then
-        log_error "Configuration validation failed"
+        echo "❌ Configuration validation failed"
         return 1
     fi
     
     if ! check_dependencies; then
-        log_error "Dependencies check failed"
+        echo "❌ Dependencies check failed"
         return 1
     fi
     
@@ -306,11 +306,11 @@ start_video_processing() {
     # Create backup directory if needed
     if [[ "$AUTO_BACKUP" == "true" ]]; then
         mkdir -p "$BACKUP_DIR"
-        log_info "💾 Auto backup enabled: $BACKUP_DIR"
+        echo "💾 Auto backup enabled: $BACKUP_DIR"
     fi
     
     # Find video files
-    log_info "🔍 Searching for video files in: $SOURCE_DIR"
+    echo "🔍 Searching for video files in: $SOURCE_DIR"
     local video_files=()
     while IFS= read -r -d '' file; do
         video_files+=("$file")
@@ -319,13 +319,13 @@ start_video_processing() {
     local total=${#video_files[@]}
     
     if [[ $total -eq 0 ]]; then
-        log_warning "No video files found in: $SOURCE_DIR"
-        log_info "💡 Supported formats: MP4, MOV, AVI"
-        log_info "💡 Check your source directory path: $SOURCE_DIR"
+        echo "⚠️ No video files found in: $SOURCE_DIR"
+        echo "💡 Supported formats: MP4, MOV, AVI"
+        echo "💡 Check your source directory path: $SOURCE_DIR"
         exit 0
     fi
     
-    log_info "Found $total files to process"
+    echo "Found $total files to process"
     
     # Initialize counters
     local processed_count=0
@@ -336,14 +336,20 @@ start_video_processing() {
     local total_start_time
     total_start_time=$(date +%s)
     
+    # Convert auto to actual number
+    local actual_parallel_jobs="$PARALLEL_JOBS"
+    if [[ "$PARALLEL_JOBS" == "auto" ]]; then
+        actual_parallel_jobs=$(get_cpu_cores)
+    fi
+    
     # Choose processing mode based on PARALLEL_JOBS setting
-    if [[ "$PARALLEL_JOBS" -eq 1 ]]; then
+    if [[ "$actual_parallel_jobs" -eq 1 ]]; then
         # Sequential processing
-        log_info "🔄 Sequential processing (1 file at a time)"
+        echo "🔄 Sequential processing (1 file at a time)"
         
         for i in "${!video_files[@]}"; do
             local input_file="${video_files[$i]}"
-            log_info "📁 File $((i+1))/$total: $(basename "$input_file")"
+            echo "📁 File $((i+1))/$total: $(basename "$input_file")"
             
             if process_video_file "$input_file"; then
                 ((processed_count++))
