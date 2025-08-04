@@ -41,7 +41,9 @@ init_logging() {
 
 # Get timestamp for logging
 _get_timestamp() {
-    [[ "$DJI_LOG_TIMESTAMPS" == "true" ]] && date '+%Y-%m-%d %H:%M:%S'
+    if [[ "$DJI_LOG_TIMESTAMPS" == "true" ]]; then
+        date '+%Y-%m-%d %H:%M:%S'
+    fi
 }
 
 # Core logging function

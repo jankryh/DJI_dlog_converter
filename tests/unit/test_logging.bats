@@ -9,13 +9,16 @@ setup() {
     # Load common test setup
     source "tests/test_helper/test_helper.bash"
     
+    # Disable file logging and timestamps by default
+    export DJI_LOG_FILE=""
+    export DJI_LOG_TIMESTAMPS="false"
+    export DJI_LOG_LEVEL="INFO"
+    
     # Source the logging module
     source_module "lib/core/logging.sh"
     
-    # Set up test log file
+    # Set up test log file for file logging tests
     export TEST_LOG_FILE="$TEMP_TEST_DIR/test.log"
-    export ENABLE_FILE_LOGGING="true"
-    export LOG_FILE="$TEST_LOG_FILE"
 }
 
 @test "log_info: should output info message with color" {
@@ -41,16 +44,16 @@ setup() {
 }
 
 @test "log_debug: should output debug message when debug enabled" {
-    export DEBUG_LOGGING="true"
+    export DJI_LOG_LEVEL="DEBUG"
     
     run log_debug "Test debug message"
     assert_success
     assert_output --partial "Test debug message"
-    assert_output --partial "🐛"
+    assert_output --partial "🔍"
 }
 
 @test "log_debug: should not output when debug disabled" {
-    export DEBUG_LOGGING="false"
+    export DJI_LOG_LEVEL="INFO"
     
     run log_debug "Test debug message"
     assert_success
@@ -65,7 +68,8 @@ setup() {
 }
 
 @test "file logging: should write to log file when enabled" {
-    export ENABLE_FILE_LOGGING="true"
+    mkdir -p "$(dirname "$TEST_LOG_FILE")"
+    export DJI_LOG_FILE="$TEST_LOG_FILE"
     
     log_info "Test file logging message"
     
@@ -74,7 +78,7 @@ setup() {
 }
 
 @test "file logging: should not create file when disabled" {
-    export ENABLE_FILE_LOGGING="false"
+    export DJI_LOG_FILE=""
     
     log_info "Test message"
     
@@ -114,9 +118,11 @@ setup() {
 }
 
 @test "_log function: should include timestamp in file output" {
-    export ENABLE_FILE_LOGGING="true"
+    mkdir -p "$(dirname "$TEST_LOG_FILE")"
+    export DJI_LOG_FILE="$TEST_LOG_FILE"
+    export DJI_LOG_TIMESTAMPS="true"
     
-    _log "INFO" "Timestamped message" "32"
+    _log "INFO" "\033[0;34m" "ℹ️ " "Timestamped message"
     
     assert_file_exist "$TEST_LOG_FILE"
     assert_file_contains "$TEST_LOG_FILE" "Timestamped message"
@@ -140,7 +146,7 @@ setup() {
     assert_success
     assert_output --partial "quotes"
     
-    run log_info "Message with $special *characters* and [brackets]"
+    run log_info "Message with special *characters* and [brackets]"
     assert_success
     assert_output --partial "special"
     assert_output --partial "characters"
@@ -198,7 +204,8 @@ Line 3"
 }
 
 @test "log file rotation: should handle large log files" {
-    export ENABLE_FILE_LOGGING="true"
+    mkdir -p "$(dirname "$TEST_LOG_FILE")"
+    export DJI_LOG_FILE="$TEST_LOG_FILE"
     export MAX_LOG_SIZE="1024"  # 1KB for testing
     
     # Write many log entries to exceed size limit
