@@ -10,9 +10,9 @@
 
 ## 📖 Table of Contents
 
-> **🎯 Quick Navigation:** Použijte odkazy níže pro rychlou navigaci k příslušným sekcím dokumentace.
+> **🎯 Quick Navigation:** Use the links below for quick navigation to relevant documentation sections.
 
-**🔥 Pro rychlý start:** [Quick Start](#-quick-start) | **🎨 LUT Management:** [LUT Commands](#lut-management-commands) | **⚙️ Konfigurace:** [Configuration](#️-configuration)
+**🔥 Quick Start:** [Quick Start](#-quick-start) | **🎨 LUT Management:** [LUT Commands](#lut-management-commands) | **⚙️ Configuration:** [Configuration](#️-configuration)
 
 - [✨ Features](#-features)
 - [🚀 Quick Start](#-quick-start)
