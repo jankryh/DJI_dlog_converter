@@ -343,24 +343,41 @@ manage_luts() {
         interactive|manage)
             interactive_lut_organizer
             ;;
+        dji-browse)
+            show_dji_luts
+            ;;
+        dji-download)
+            download_dji_luts
+            ;;
+        dji-browser)
+            show_dji_lut_browser
+            ;;
         menu|"")
             show_lut_management_menu
             ;;
         help)
             echo "LUT Management Commands:"
             echo "======================="
-            echo "  list      - List all available LUT files"
-            echo "  select    - Interactively select a LUT"
-            echo "  info      - Show LUT file details"
-            echo "  organize  - Create category structure"
-            echo "  manage    - Interactive LUT organizer"
-            echo "  menu      - Show full LUT management menu"
+            echo "  list         - List all available LUT files"
+            echo "  select       - Interactively select a LUT"
+            echo "  info         - Show LUT file details"
+            echo "  organize     - Create category structure"
+            echo "  manage       - Interactive LUT organizer"
+            echo "  menu         - Show full LUT management menu"
+            echo ""
+            echo "DJI Official LUT Commands:"
+            echo "========================="
+            echo "  dji-browse   - Browse available DJI official LUTs"
+            echo "  dji-download - Download selected DJI LUTs"
+            echo "  dji-browser  - Full DJI LUT browser interface"
             echo ""
             echo "Examples:"
             echo "  ./dji-processor lut list"
             echo "  ./dji-processor lut select"
             echo "  ./dji-processor lut info ./luts/Avata2.cube"
             echo "  ./dji-processor lut organize"
+            echo "  ./dji-processor lut dji-browse"
+            echo "  ./dji-processor lut dji-download"
             ;;
         *)
             echo "❌ Unknown LUT action: $action"

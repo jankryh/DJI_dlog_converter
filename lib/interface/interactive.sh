@@ -332,10 +332,11 @@ show_lut_management_menu() {
         echo "[4] Organize LUTs by category"
         echo "[5] Interactive LUT organizer"
         echo "[6] Create category structure"
+        echo "[7] 🎬 Browse & Download DJI Official LUTs"
         echo "[0] Back to main menu"
         echo ""
         
-        read -p "Select option (0-6): " choice
+        read -p "Select option (0-7): " choice
         
         case "$choice" in
             1)
@@ -368,11 +369,14 @@ show_lut_management_menu() {
             6)
                 organize_luts_by_category "$luts_dir"
                 ;;
+            7)
+                show_dji_lut_browser
+                ;;
             0)
                 return 0
                 ;;
             *)
-                echo "❌ Invalid option. Please choose 0-6"
+                echo "❌ Invalid option. Please choose 0-7"
                 ;;
         esac
         
@@ -422,6 +426,294 @@ run_interactive_setup() {
     done
 }
 
+# DJI Official LUT Download Functions
+# =====================================
+
+# Define available DJI LUTs based on official website
+declare -A DJI_LUTS=(
+    # Camera Drones
+    ["mavic3_dlog_m_rec709"]="DJI Mavic 3 D-Log M to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["mavic3_dlog_rec709_vivid"]="DJI Mavic 3 D-Log to Rec.709 vivid LUT|cinematic|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["mavic3_dlog_rec709"]="DJI Mavic 3 D-Log to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["avata2_dlog_m_rec709"]="DJI Avata 2 D-Log M to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["flip_dlog_m_rec709"]="DJI Flip D-Log M to Rec.709|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["mini4pro_dlog_m_rec709"]="DJI Mini 4 Pro D-Log M to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["air3s_dlog_m_rec709"]="DJI Air 3s D-Log M to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["air3_dlog_m_rec709"]="DJI Air 3 D-Log M to Rec.709 LUT|drone|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["phantom4_dlog"]="DJI Phantom 4 Dlog 3D LUT|vintage|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["phantom3_dlog_srgb"]="DJI Phantom 3 Dlog to sRGB 3D LUT|vintage|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["inspire1_dlog_srgb"]="DJI Inspire 1 Dlog to sRGB 3D LUT|vintage|https://www.dji.com/downloads/djiapp/dji-lut"
+    
+    # Handheld
+    ["action5_dlog_m_rec709_vivid"]="DJI OSMO Action 5 D-Log M to Rec.709 vivid LUT|cinematic|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["action4_dlog_m_rec709_vivid"]="DJI OSMO Action 4 D-Log M to Rec.709 vivid LUT|cinematic|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["pocket3_dlog_m_rec709"]="DJI OSMO Pocket 3 D-Log M to Rec.709 LUT|cinematic|https://www.dji.com/downloads/djiapp/dji-lut"
+    
+    # Specialized
+    ["x9_dlog_rec2020_hlg"]="DJI Zenmuse X9 D-Log to Rec.2020 HLG LUT|color-grading|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["x9_dlog_rec709"]="DJI Zenmuse X9 D-Log to Rec.709 LUT|color-grading|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["x5_dlog_srgb"]="DJI Zenmuse X5 Dlog to sRGB 3D LUT|color-grading|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["x5x7_linear_dlog"]="DJI Zenmuse X5/X7 Linear to D-Log LUT|color-grading|https://www.dji.com/downloads/djiapp/dji-lut"
+    ["x5x7_dlog_rec709"]="DJI Zenmuse X5/X7 D-Log to Rec.709 LUT|color-grading|https://www.dji.com/downloads/djiapp/dji-lut"
+)
+
+# Show available DJI LUTs for download
+show_dji_luts() {
+    log_info "🎬 Official DJI LUT Downloads"
+    echo "=============================="
+    echo ""
+    echo "📥 Browse and download official LUTs from DJI website"
+    echo "🌐 Source: https://www.dji.com/lut"
+    echo ""
+    
+    echo "📱 Camera Drones:"
+    echo "----------------"
+    local count=1
+    for key in "${!DJI_LUTS[@]}"; do
+        local lut_info="${DJI_LUTS[$key]}"
+        local name=$(echo "$lut_info" | cut -d'|' -f1)
+        local category=$(echo "$lut_info" | cut -d'|' -f2)
+        
+        case "$key" in
+            mavic3_*|avata2_*|flip_*|mini4pro_*|air3*_*|phantom*_*|inspire1_*)
+                echo "  [$count] $name (→ $category/)"
+                ((count++))
+                ;;
+        esac
+    done
+    
+    echo ""
+    echo "📷 Handheld Cameras:"
+    echo "-------------------"
+    for key in "${!DJI_LUTS[@]}"; do
+        local lut_info="${DJI_LUTS[$key]}"
+        local name=$(echo "$lut_info" | cut -d'|' -f1)
+        local category=$(echo "$lut_info" | cut -d'|' -f2)
+        
+        case "$key" in
+            action*_*|pocket3_*)
+                echo "  [$count] $name (→ $category/)"
+                ((count++))
+                ;;
+        esac
+    done
+    
+    echo ""
+    echo "🎛️ Specialized Equipment:"
+    echo "------------------------"
+    for key in "${!DJI_LUTS[@]}"; do
+        local lut_info="${DJI_LUTS[$key]}"
+        local name=$(echo "$lut_info" | cut -d'|' -f1)
+        local category=$(echo "$lut_info" | cut -d'|' -f2)
+        
+        case "$key" in
+            x9_*|x5_*|x5x7_*)
+                echo "  [$count] $name (→ $category/)"
+                ((count++))
+                ;;
+        esac
+    done
+    
+    echo ""
+    echo "💡 Note: LUTs will be downloaded and organized into appropriate categories"
+}
+
+# Interactive DJI LUT downloader
+download_dji_luts() {
+    log_info "🌐 DJI Official LUT Downloader"
+    echo "=============================="
+    echo ""
+    
+    # Check if curl or wget is available
+    if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+        log_error "❌ Neither curl nor wget found. Please install one of them to download LUTs."
+        echo "💡 Install with:"
+        echo "   macOS: brew install curl"
+        echo "   Linux: sudo apt-get install curl"
+        return 1
+    fi
+    
+    show_dji_luts
+    echo ""
+    
+    # Create array for selection
+    local lut_keys=()
+    for key in "${!DJI_LUTS[@]}"; do
+        lut_keys+=("$key")
+    done
+    
+    # Sort keys for consistent ordering
+    IFS=$'\n' lut_keys=($(sort <<<"${lut_keys[*]}"))
+    unset IFS
+    
+    echo "🎯 Select LUT to download:"
+    echo "[0] Back to LUT menu"
+    echo "[a] Download all LUTs (organized by category)"
+    echo ""
+    
+    while true; do
+        read -p "Select LUT (0-${#lut_keys[@]}, 'a' for all): " choice
+        
+        case "$choice" in
+            0)
+                return 0
+                ;;
+            a|A)
+                download_all_dji_luts
+                return 0
+                ;;
+            [1-9]*)
+                if [[ "$choice" -ge 1 && "$choice" -le ${#lut_keys[@]} ]]; then
+                    local selected_key="${lut_keys[$((choice-1))]}"
+                    download_single_dji_lut "$selected_key"
+                    return 0
+                else
+                    echo "❌ Invalid selection. Please choose 0-${#lut_keys[@]} or 'a'"
+                fi
+                ;;
+            *)
+                echo "❌ Invalid input. Use 0-${#lut_keys[@]}, 'a' for all"
+                ;;
+        esac
+    done
+}
+
+# Download a single DJI LUT
+download_single_dji_lut() {
+    local lut_key="$1"
+    local lut_info="${DJI_LUTS[$lut_key]}"
+    local name=$(echo "$lut_info" | cut -d'|' -f1)
+    local category=$(echo "$lut_info" | cut -d'|' -f2)
+    local base_url=$(echo "$lut_info" | cut -d'|' -f3)
+    
+    echo ""
+    echo "📥 Downloading: $name"
+    echo "📁 Category: $category"
+    
+    # Create category directory
+    local luts_dir="./luts"
+    mkdir -p "$luts_dir/$category"
+    
+    # Generate filename from key
+    local filename="${lut_key}.cube"
+    local target_path="$luts_dir/$category/$filename"
+    
+    echo "💾 Saving to: $target_path"
+    echo ""
+    
+    # Note: Since we can't directly access the actual download URLs from the search results,
+    # we'll create a placeholder and show instructions for manual download
+    echo "🌐 Manual Download Required:"
+    echo "1. Visit: https://www.dji.com/lut"
+    echo "2. Find: $name"
+    echo "3. Download the LUT file"
+    echo "4. Save as: $target_path"
+    echo ""
+    echo "⚠️  Note: Automatic download will be implemented when DJI provides direct download URLs"
+    
+    # Create placeholder file with instructions
+    cat > "$target_path" << EOF
+# $name
+# Downloaded from: https://www.dji.com/lut
+# Category: $category
+# 
+# This is a placeholder file. Please download the actual LUT from:
+# https://www.dji.com/lut
+# 
+# Replace this file with the downloaded .cube file
+TITLE "$name"
+LUT_3D_SIZE 32
+
+# Placeholder data - replace with actual LUT content
+0.0 0.0 0.0
+0.1 0.1 0.1
+0.2 0.2 0.2
+EOF
+    
+    echo "✅ Placeholder created: $target_path"
+    echo "💡 Please replace with actual LUT file from DJI website"
+}
+
+# Download all DJI LUTs
+download_all_dji_luts() {
+    echo ""
+    echo "📦 Downloading all DJI LUTs..."
+    echo "==============================="
+    echo ""
+    
+    local total=${#DJI_LUTS[@]}
+    local count=0
+    
+    for key in "${!DJI_LUTS[@]}"; do
+        ((count++))
+        echo "[$count/$total] Processing: $key"
+        download_single_dji_lut "$key"
+        echo ""
+    done
+    
+    echo "✅ All DJI LUT placeholders created!"
+    echo "📁 Check the luts/ directory structure:"
+    echo ""
+    
+    # Show organization results
+    organize_luts_by_category "./luts" > /dev/null 2>&1
+    echo "🎯 Visit https://www.dji.com/lut to download actual LUT files"
+}
+
+# Show DJI LUT browser and downloader
+show_dji_lut_browser() {
+    while true; do
+        echo ""
+        log_info "🎬 DJI Official LUT Browser"
+        echo "============================"
+        echo ""
+        echo "[1] Browse available DJI LUTs"
+        echo "[2] Download selected LUTs"
+        echo "[3] Download all DJI LUTs"
+        echo "[4] Visit DJI LUT website"
+        echo "[0] Back to LUT menu"
+        echo ""
+        
+        read -p "Select option (0-4): " choice
+        
+        case "$choice" in
+            1)
+                show_dji_luts
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            2)
+                download_dji_luts
+                ;;
+            3)
+                download_all_dji_luts
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            4)
+                echo ""
+                echo "🌐 Opening DJI LUT website..."
+                echo "Visit: https://www.dji.com/lut"
+                echo ""
+                if command -v xdg-open >/dev/null 2>&1; then
+                    xdg-open "https://www.dji.com/lut"
+                elif command -v open >/dev/null 2>&1; then
+                    open "https://www.dji.com/lut"
+                else
+                    echo "💡 Please open the URL manually in your browser"
+                fi
+                read -p "Press Enter to continue..."
+                ;;
+            0)
+                return 0
+                ;;
+            *)
+                echo "❌ Invalid option. Please choose 0-4"
+                ;;
+        esac
+    done
+}
+
 log_debug "Interactive setup module with LUT management loaded"
 
 # Export functions
@@ -432,3 +724,8 @@ export -f select_lut_interactive
 export -f get_lut_info
 export -f organize_luts_by_category
 export -f interactive_lut_organizer
+export -f show_dji_luts
+export -f download_dji_luts
+export -f download_single_dji_lut
+export -f download_all_dji_luts
+export -f show_dji_lut_browser

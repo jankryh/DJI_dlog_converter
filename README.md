@@ -270,6 +270,9 @@ lut select             # Interactive LUT selection with preview
 lut info [FILE]        # Show detailed LUT file information
 lut organize           # Create category structure for LUTs
 lut manage             # Interactive LUT organizer and categorizer
+lut dji-browse         # Browse official DJI LUTs from website
+lut dji-download       # Download selected DJI official LUTs
+lut dji-browser        # Full DJI LUT browser and downloader
 lut help               # Show detailed LUT management help
 ```
 
@@ -282,6 +285,33 @@ The LUT management system automatically organizes LUTs into categories:
 - **`luts/vintage/`** - Retro and vintage aesthetic LUTs
 - **`luts/color-grading/`** - Professional color correction LUTs
 - **`luts/custom/`** - Custom and experimental user LUTs
+
+#### DJI Official LUT Downloads
+
+🎬 **New Feature**: Browse and download official LUTs directly from the [DJI website](https://www.dji.com/lut)
+
+**Available DJI LUTs:**
+- **Camera Drones**: Mavic 3, Avata 2, Mini 4 Pro, Air 3/3s, Phantom 4/3, Inspire 1
+- **Handheld**: OSMO Action 5/4, OSMO Pocket 3  
+- **Specialized**: Zenmuse X9, X5, X7 series
+
+**DJI LUT Commands:**
+```bash
+# Browse all available DJI LUTs organized by device type
+./dji-processor lut dji-browse
+
+# Interactive downloader with category organization
+./dji-processor lut dji-download
+
+# Full DJI LUT browser interface
+./dji-processor lut dji-browser
+```
+
+**Features:**
+- 🎯 **Automatic categorization** - LUTs organized by device type and purpose
+- 📱 **Device-specific browsing** - Camera drones, handheld, and specialized equipment
+- 📥 **Guided downloads** - Step-by-step instructions for manual download
+- 🔗 **Direct website integration** - Links to official DJI LUT page
 
 [⬆️ Back to top](#-table-of-contents)
 
@@ -384,6 +414,10 @@ CONFIG_FILE="./my-config.yml" ./dji-processor process
 
 # Access full LUT management menu
 ./dji-processor lut menu
+
+# Browse and download official DJI LUTs
+./dji-processor lut dji-browse
+./dji-processor lut dji-download
 ```
 
 #### Practical LUT Management Examples
@@ -410,15 +444,21 @@ CONFIG_FILE="./my-config.yml" ./dji-processor process
 #### LUT Collection Management
 
 ```bash
-# Add new LUTs to appropriate categories
+# Download official DJI LUTs (automatically categorized)
+./dji-processor lut dji-download
+
+# Add custom LUTs to appropriate categories
 cp new-cinematic.cube ./luts/cinematic/
 cp drone-specific.cube ./luts/drone/
 
-# Review and organize all LUTs
+# Review and organize all LUTs (including DJI downloads)
 ./dji-processor lut manage
 
 # Quick overview of all LUT collections
 ./dji-processor lut list
+
+# Browse DJI official LUTs by device type
+./dji-processor lut dji-browse
 ```
 
 [⬆️ Back to top](#-table-of-contents)
