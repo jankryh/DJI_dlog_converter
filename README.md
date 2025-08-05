@@ -29,6 +29,8 @@
 - **Disk space monitoring**
 - **macOS system integration** (notifications, sounds)
 - **Comprehensive logging system**
+- **LUT management system** with categorization and interactive selection
+- **Interactive setup wizard** with full configuration management
 
 ## 🚀 Quick Start
 
@@ -61,6 +63,13 @@ ln -sf bin/dji-processor dji-processor
 # Dry run (validate without processing)
 ./dji-processor process --dry-run
 
+# LUT management
+./dji-processor lut list            # List available LUTs
+./dji-processor lut select          # Interactive LUT selection
+
+# Interactive setup wizard
+./dji-processor interactive
+
 # Show help
 ./dji-processor help
 ```
@@ -82,7 +91,7 @@ DJI/
 │   ├── system/                     # System operations
 │   │   └── filesystem.sh           # File system utilities
 │   └── interface/                  # User interface modules
-│       └── interactive.sh          # Interactive setup wizard
+│       └── interactive.sh          # Interactive setup wizard & LUT management
 ├── config/
 │   └── templates/                  # Configuration templates
 ├── examples/                       # Example configurations
@@ -176,6 +185,12 @@ max_file_size: 0                 # GB, 0 = no limit
 # Configuration management
 ./dji-processor config [SUBCOMMAND]
 
+# LUT management
+./dji-processor lut [SUBCOMMAND]
+
+# Interactive setup wizard
+./dji-processor interactive
+
 # Show help
 ./dji-processor help [COMMAND]
 
@@ -204,6 +219,27 @@ config validate        # Validate current configuration
 config show            # Show current configuration
 config setup           # Interactive configuration wizard
 ```
+
+### LUT Management Commands
+
+```bash
+lut list               # List all available LUT files with details
+lut select             # Interactive LUT selection with preview
+lut info [FILE]        # Show detailed LUT file information
+lut organize           # Create category structure for LUTs
+lut manage             # Interactive LUT organizer and categorizer
+lut help               # Show detailed LUT management help
+```
+
+#### LUT Categories
+
+The LUT management system automatically organizes LUTs into categories:
+
+- **`luts/drone/`** - LUTs specifically designed for drone footage
+- **`luts/cinematic/`** - Film-style and cinematic color grading LUTs
+- **`luts/vintage/`** - Retro and vintage aesthetic LUTs
+- **`luts/color-grading/`** - Professional color correction LUTs
+- **`luts/custom/`** - Custom and experimental user LUTs
 
 ## 🔧 System Requirements
 
@@ -282,6 +318,63 @@ CONFIG_FILE="./my-config.yml" ./dji-processor process
 ./dji-processor process --quality medium  # backup enabled in config
 ```
 
+### LUT Management Workflow
+
+```bash
+# List all available LUTs with details
+./dji-processor lut list
+
+# Interactive LUT selection with preview
+./dji-processor lut select
+
+# Get detailed information about a specific LUT
+./dji-processor lut info ./luts/Avata2.cube
+
+# Organize LUTs into categories
+./dji-processor lut organize
+
+# Use interactive organizer to categorize existing LUTs
+./dji-processor lut manage
+
+# Access full LUT management menu
+./dji-processor lut menu
+```
+
+#### Practical LUT Management Examples
+
+```bash
+# Setup LUT organization structure
+./dji-processor lut organize
+
+# Interactively organize existing LUTs
+./dji-processor lut manage
+
+# Select and preview different LUTs before processing
+./dji-processor lut select
+# Then process with selected LUT
+./dji-processor process --lut "./luts/cinematic/film-lut.cube"
+
+# Quick LUT information lookup
+./dji-processor lut info ./luts/drone/avata2-sharp.cube
+
+# Full interactive workflow
+./dji-processor interactive  # Includes LUT management
+```
+
+#### LUT Collection Management
+
+```bash
+# Add new LUTs to appropriate categories
+cp new-cinematic.cube ./luts/cinematic/
+cp drone-specific.cube ./luts/drone/
+
+# Review and organize all LUTs
+./dji-processor lut manage
+
+# Quick overview of all LUT collections
+./dji-processor lut list
+```
+
 ## 📊 Performance
 
 ### Benchmarks
@@ -325,8 +418,27 @@ CONFIG_FILE="./my-config.yml" ./dji-processor process
 
 4. **LUT file missing**
    ```bash
+   # List available LUTs
+   ./dji-processor lut list
+   
    # Copy your LUT file
    cp /path/to/your/lut.cube luts/Avata2.cube
+   
+   # Or use LUT management to organize
+   ./dji-processor lut organize
+   ./dji-processor lut manage
+   ```
+
+5. **LUT organization issues**
+   ```bash
+   # Create category structure
+   ./dji-processor lut organize
+   
+   # Interactive organization
+   ./dji-processor lut manage
+   
+   # Check LUT details
+   ./dji-processor lut info ./luts/your-lut.cube
    ```
 
 ### Validation

@@ -50,6 +50,8 @@ COMMANDS:
     process                 Process video files (default action)
     validate               Validate configuration and setup
     config                 Manage configuration
+    lut                    Manage LUT files and collections
+    interactive            Launch interactive setup wizard
     status                 Show processing status
     help                   Show this help message
     version                Show version information
@@ -70,11 +72,22 @@ CONFIG OPTIONS:
     config show            Show current configuration
     config setup           Interactive configuration wizard
 
+LUT OPTIONS:
+    lut list               List all available LUT files
+    lut select             Interactively select a LUT
+    lut info [FILE]        Show LUT file details
+    lut organize           Create LUT category structure
+    lut manage             Interactive LUT organizer
+    lut help               Show LUT management help
+
 EXAMPLES:
     $0                     Process videos with default settings
     $0 process --dry-run   Validate setup without processing
     $0 config create       Create default configuration
     $0 validate            Check system and configuration
+    $0 lut list            Show available LUTs
+    $0 lut select          Choose LUT interactively
+    $0 interactive         Launch setup wizard
 
 For detailed documentation, see: README.md
 EOF
@@ -101,6 +114,14 @@ main() {
             shift || true
             show_status "$@"
             ;;
+        lut|luts)
+            shift || true
+            manage_luts "$@"
+            ;;
+        interactive|wizard)
+            shift || true
+            run_interactive_setup "$@"
+            ;;
         help|--help|-h)
             show_help
             ;;
@@ -124,6 +145,15 @@ load_processing_modules() {
     source "$LIB_DIR/system/filesystem.sh"
     
     readonly _DJI_PROCESSING_LOADED=true
+}
+
+# Load interactive modules when needed
+load_interactive_modules() {
+    [[ "${_DJI_INTERACTIVE_LOADED:-}" == "true" ]] && return 0
+    
+    source "$LIB_DIR/interface/interactive.sh"
+    
+    readonly _DJI_INTERACTIVE_LOADED=true
 }
 
 # Process videos command
@@ -234,7 +264,7 @@ manage_config() {
             ;;
         setup)
             # Load interactive module
-            source "$LIB_DIR/interface/interactive.sh"
+            load_interactive_modules
             run_interactive_setup
             ;;
         *)
@@ -275,6 +305,69 @@ show_status() {
     else
         echo "FFmpeg: Not installed"
     fi
+}
+
+# Manage LUTs command
+manage_luts() {
+    load_interactive_modules
+    
+    local action="${1:-menu}"
+    
+    case "$action" in
+        list|ls)
+            list_available_luts
+            ;;
+        select|choose)
+            local selected
+            selected=$(select_lut_interactive)
+            if [[ $? -eq 0 && -n "$selected" ]]; then
+                echo "💾 To use this LUT permanently, update your config:"
+                echo "   lut_file: \"$selected\""
+                echo ""
+                echo "💾 Or use it for one session:"
+                echo "   ./dji-processor process --lut \"$selected\""
+            fi
+            ;;
+        info|details)
+            local lut_file="${2:-$LUT_FILE}"
+            if [[ -f "$lut_file" ]]; then
+                get_lut_info "$lut_file"
+            else
+                echo "❌ LUT file not found: $lut_file"
+                echo "💡 Use 'lut list' to see available LUTs"
+            fi
+            ;;
+        organize)
+            organize_luts_by_category
+            ;;
+        interactive|manage)
+            interactive_lut_organizer
+            ;;
+        menu|"")
+            show_lut_management_menu
+            ;;
+        help)
+            echo "LUT Management Commands:"
+            echo "======================="
+            echo "  list      - List all available LUT files"
+            echo "  select    - Interactively select a LUT"
+            echo "  info      - Show LUT file details"
+            echo "  organize  - Create category structure"
+            echo "  manage    - Interactive LUT organizer"
+            echo "  menu      - Show full LUT management menu"
+            echo ""
+            echo "Examples:"
+            echo "  ./dji-processor lut list"
+            echo "  ./dji-processor lut select"
+            echo "  ./dji-processor lut info ./luts/Avata2.cube"
+            echo "  ./dji-processor lut organize"
+            ;;
+        *)
+            echo "❌ Unknown LUT action: $action"
+            echo "Use './dji-processor lut help' for usage information."
+            exit 1
+            ;;
+    esac
 }
 
 # Start video processing
