@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Configuration - easily customizable
 readonly LUT_FILE="${LUT_FILE:-./luts/Avata2.cube}"
-readonly QUALITY="${QUALITY:-standard}"  # draft, standard, high, professional
+readonly QUALITY="${QUALITY:-professional}"  # draft, standard, high, professional
 readonly OUTPUT_SUFFIX="${OUTPUT_SUFFIX:-_processed}"
 
 # Colors for output
