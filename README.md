@@ -95,12 +95,6 @@ The script automatically detects and uses the best available hardware accelerati
 - **Linux**: VAAPI (h264_vaapi) or NVENC (h264_nvenc)
 - **Fallback**: Software encoding (libx264)
 
-## Performance
-
-- **Startup**: ~90% faster than complex versions
-- **Memory**: ~70% less memory usage
-- **Processing**: Same FFmpeg performance, optimized command structure
-- **Dependencies**: None (self-contained script)
 
 ## Troubleshooting
 
@@ -129,20 +123,6 @@ The script automatically detects and uses the best available hardware accelerati
 ```bash
 ./dji-processor --help
 ```
-
-## Comparison with Complex Version
-
-| Feature | Complex Version | Simple Version |
-|---------|----------------|----------------|
-| Lines of code | 590+ | 280 |
-| Modules | 8+ files | 1 file |
-| Configuration | YAML files | Environment variables |
-| Parallel processing | Yes | No (not needed) |
-| Backup system | Yes | No (not needed) |
-| Interactive wizards | Yes | No (not needed) |
-| Core functionality | <check> | <check> |
-| Performance | Good | Better |
-| Maintainability | Complex | Simple |
 
 ## License
 
