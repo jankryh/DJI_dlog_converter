@@ -4,12 +4,12 @@ A lightweight, high-performance shell script for applying LUTs to DJI D-Log vide
 
 ## Features
 
-- ✅ **Simple usage**: Just specify input file, output is auto-generated
-- ✅ **Hardware acceleration**: Automatically detects and uses VideoToolbox (macOS), VAAPI (Linux), or NVENC
-- ✅ **Quality presets**: Draft, Standard, High, Professional
-- ✅ **Progress tracking**: Real-time progress bar with visual feedback
-- ✅ **Error handling**: Clear error messages with helpful suggestions
-- ✅ **Self-contained**: No external dependencies beyond FFmpeg
+- <check> **Simple usage**: Just specify input file, output is auto-generated
+- <zap> **Hardware acceleration**: Automatically detects and uses VideoToolbox (macOS), VAAPI (Linux), or NVENC
+- <settings> **Quality presets**: Draft, Standard, High, Professional
+- <bar-chart-3> **Progress tracking**: Real-time progress bar with visual feedback
+- <alert-circle> **Error handling**: Clear error messages with helpful suggestions
+- <package> **Self-contained**: No external dependencies beyond FFmpeg
 
 ## Quick Start
 
@@ -140,7 +140,7 @@ The script automatically detects and uses the best available hardware accelerati
 | Parallel processing | Yes | No (not needed) |
 | Backup system | Yes | No (not needed) |
 | Interactive wizards | Yes | No (not needed) |
-| Core functionality | ✅ | ✅ |
+| Core functionality | <check> | <check> |
 | Performance | Good | Better |
 | Maintainability | Complex | Simple |
 
