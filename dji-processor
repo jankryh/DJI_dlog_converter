@@ -33,8 +33,8 @@ USAGE:
     $0 <input_file> [output_file] [options]
 
 ARGUMENTS:
-    input_file     Path to input MP4 file
-    output_file    Path to output file (optional, auto-generated if not provided)
+    input_file     Path to input MP4 file or directory
+    output_file    Path to output file or directory (optional)
 
 OPTIONS:
     --lut FILE     LUT file path (default: $LUT_FILE)
@@ -182,16 +182,17 @@ process_video() {
     fi
     
     # Get video duration
-    local duration
-    duration=$(get_video_duration "$input_file")
-    if [[ -z "$duration" ]]; then
-        log_error "Cannot read video duration from: $input_file"
-        return 1
-    fi
+    local duration=""
+    local duration_int=0
     
-    # Convert duration to integer for progress calculation
-    local duration_int
-    printf -v duration_int "%.0f" "$duration"
+    if [[ "$dry_run" != "true" ]]; then
+        duration=$(get_video_duration "$input_file")
+        if [[ -z "$duration" ]]; then
+            log_error "Cannot read video duration from: $input_file"
+            return 1
+        fi
+        printf -v duration_int "%.0f" "$duration"
+    fi
     
     # Detect best encoder
     local encoder
@@ -377,6 +378,60 @@ main() {
         exit 1
     fi
     
+    # Check if input is a directory for batch processing
+    if [[ -d "$input_file" ]]; then
+        local input_dir="$input_file"
+        local output_dir="$output_file"
+        
+        log_info "📂 Batch processing directory: $input_dir"
+        
+        # Create output directory if specified
+        if [[ -n "$output_dir" ]]; then
+            if [[ ! -d "$output_dir" ]]; then
+                if [[ "$dry_run" != "true" ]]; then
+                    mkdir -p "$output_dir"
+                    log_info "Created output directory: $output_dir"
+                else
+                    log_info "Would create output directory: $output_dir"
+                fi
+            fi
+        fi
+        
+        # Find video files
+        local found_files=0
+        # Use nullglob to handle empty directories gracefully
+        shopt -s nullglob
+        for file in "$input_dir"/*.mp4 "$input_dir"/*.MOV "$input_dir"/*.mov; do
+            [[ -f "$file" ]] || continue
+            found_files=1
+            
+            local filename
+            filename=$(basename "$file")
+            local name="${filename%.*}"
+            local ext="${filename##*.}"
+            local current_output=""
+            
+            if [[ -n "$output_dir" ]]; then
+                current_output="$output_dir/${name}${OUTPUT_SUFFIX}.${ext}"
+            else
+                current_output="$input_dir/${name}${OUTPUT_SUFFIX}.${ext}"
+            fi
+            
+            process_video "$file" "$current_output" "$lut_file" "$quality" "$codec" "$dry_run"
+        done
+        shopt -u nullglob
+        
+        if [[ $found_files -eq 0 ]]; then
+            log_warning "No video files found in $input_dir"
+        else
+             if [[ "$dry_run" != "true" ]]; then
+                log_success "Batch processing completed!"
+             fi
+        fi
+        
+        exit 0
+    fi
+
     # Generate output filename if not provided
     if [[ -z "$output_file" ]]; then
         local dir
