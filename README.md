@@ -7,6 +7,8 @@ A lightweight, high-performance shell script for applying LUTs to DJI D-Log vide
 - <check> **Simple usage**: Just specify input file, output is auto-generated
 - <zap> **Hardware acceleration**: Automatically detects and uses VideoToolbox (macOS), VAAPI (Linux), or NVENC
 - <settings> **Quality presets**: Draft, Standard, High, Professional
+- <film> **H.265 Support**: Option to use HEVC for better compression
+- <database> **Metadata**: Preserves original video metadata (GPS, dates)
 - <bar-chart-3> **Progress tracking**: Real-time progress bar with visual feedback
 - <alert-circle> **Error handling**: Clear error messages with helpful suggestions
 - <package> **Self-contained**: No external dependencies beyond FFmpeg
@@ -25,6 +27,9 @@ chmod +x dji-processor
 
 # Use different quality and LUT
 ./dji-processor video.mp4 --quality high --lut ./custom.cube
+
+# Use H.265 (HEVC) codec
+./dji-processor video.mp4 --codec h265
 ```
 
 ## Installation
@@ -55,6 +60,8 @@ chmod +x dji-processor
 ### Options
 - `--lut FILE`: LUT file path (default: ./luts/Avata2.cube)
 - `--quality SET`: Quality preset (draft, standard, high, professional)
+- `--codec TYPE`: Video codec (h264, h265)
+- `--dry-run`: Print command without executing
 - `--help`: Show help message
 
 ### Examples
@@ -75,6 +82,7 @@ done
 ```bash
 export LUT_FILE="./luts/Avata2.cube"    # Default LUT file
 export QUALITY="standard"                # Default quality
+export CODEC="h264"                      # Default codec
 export OUTPUT_SUFFIX="_processed"        # Output file suffix
 ```
 
