@@ -9,6 +9,7 @@ set -euo pipefail
 readonly LUT_FILE="${LUT_FILE:-./luts/Avata2.cube}"
 readonly QUALITY="${QUALITY:-professional}"  # draft, standard, high, professional
 readonly OUTPUT_SUFFIX="${OUTPUT_SUFFIX:-_processed}"
+readonly CODEC="${CODEC:-h264}"  # h264, h265
 
 # Colors for output
 readonly RED='\033[0;31m'
@@ -38,6 +39,8 @@ ARGUMENTS:
 OPTIONS:
     --lut FILE     LUT file path (default: $LUT_FILE)
     --quality SET  Quality preset: draft, standard, high, professional (default: $QUALITY)
+    --codec TYPE   Video codec: h264, h265 (default: $CODEC)
+    --dry-run      Print command without executing
     --help         Show this help message
 
 EXAMPLES:
@@ -48,6 +51,7 @@ EXAMPLES:
 ENVIRONMENT VARIABLES:
     LUT_FILE       Default LUT file path
     QUALITY        Default quality preset
+    CODEC          Default video codec (h264, h265)
     OUTPUT_SUFFIX  Suffix for auto-generated output files (default: _processed)
 EOF
 }
@@ -77,7 +81,7 @@ get_quality_settings() {
     local encoder="$2"
     
     # Detect hardware acceleration
-    if [[ "$encoder" == "h264_videotoolbox" ]]; then
+    if [[ "$encoder" == "h264_videotoolbox" || "$encoder" == "hevc_videotoolbox" ]]; then
         # VideoToolbox (macOS hardware acceleration)
         case "$quality" in
             draft) echo "-q:v 80 -realtime 1" ;;
@@ -85,6 +89,15 @@ get_quality_settings() {
             high) echo "-q:v 50" ;;
             professional) echo "-q:v 35" ;;
             *) echo "-q:v 65" ;;
+        esac
+    elif [[ "$encoder" == "libx265" ]]; then
+        # Software encoding (x265) - adjusted for HEVC efficiency
+        case "$quality" in
+            draft) echo "-crf 32 -preset ultrafast" ;;
+            standard) echo "-crf 28 -preset medium" ;;
+            high) echo "-crf 24 -preset slow" ;;
+            professional) echo "-crf 20 -preset veryslow" ;;
+            *) echo "-crf 28 -preset medium" ;;
         esac
     else
         # Software encoding (x264)
@@ -100,15 +113,30 @@ get_quality_settings() {
 
 # Detect best available encoder
 detect_encoder() {
-    # Check for hardware acceleration first
-    if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_videotoolbox"; then
-        echo "h264_videotoolbox"
-    elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_vaapi"; then
-        echo "h264_vaapi"
-    elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_nvenc"; then
-        echo "h264_nvenc"
+    local codec="$1"
+    
+    if [[ "$codec" == "h265" || "$codec" == "hevc" ]]; then
+        # HEVC / H.265
+        if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "hevc_videotoolbox"; then
+            echo "hevc_videotoolbox"
+        elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "hevc_vaapi"; then
+            echo "hevc_vaapi"
+        elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "hevc_nvenc"; then
+            echo "hevc_nvenc"
+        else
+            echo "libx265"
+        fi
     else
-        echo "libx264"
+        # AVC / H.264 (Default)
+        if ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_videotoolbox"; then
+            echo "h264_videotoolbox"
+        elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_vaapi"; then
+            echo "h264_vaapi"
+        elif ffmpeg -hide_banner -encoders 2>/dev/null | grep -q "h264_nvenc"; then
+            echo "h264_nvenc"
+        else
+            echo "libx264"
+        fi
     fi
 }
 
@@ -144,6 +172,8 @@ process_video() {
     local output_file="$2"
     local lut_file="$3"
     local quality="$4"
+    local codec="$5"
+    local dry_run="$6"
     
     # Validate input file
     if [[ ! -f "$input_file" ]]; then
@@ -165,8 +195,11 @@ process_video() {
     
     # Detect best encoder
     local encoder
-    encoder=$(detect_encoder)
-    log_info "Using encoder: $encoder"
+    encoder=$(detect_encoder "$codec")
+    
+    if [[ "$dry_run" != "true" ]]; then
+        log_info "Using encoder: $encoder"
+    fi
     
     # Get quality settings
     local quality_args
@@ -184,13 +217,14 @@ process_video() {
         -c:v "$encoder"
         $quality_args
         -c:a copy
-        -movflags +faststart
+        -map_metadata 0
+        -movflags +faststart+use_metadata_tags
         -y "$output_file"
     )
     
     # Add hardware acceleration if available
     case "$encoder" in
-        h264_videotoolbox)
+        h264_videotoolbox|hevc_videotoolbox)
             ffmpeg_cmd=(
                 ffmpeg
                 -hide_banner
@@ -203,11 +237,12 @@ process_video() {
                 -c:v "$encoder"
                 $quality_args
                 -c:a copy
-                -movflags +faststart
+                -map_metadata 0
+                -movflags +faststart+use_metadata_tags
                 -y "$output_file"
             )
             ;;
-        h264_vaapi)
+        h264_vaapi|hevc_vaapi)
             ffmpeg_cmd=(
                 ffmpeg
                 -hide_banner
@@ -220,11 +255,18 @@ process_video() {
                 -c:v "$encoder"
                 $quality_args
                 -c:a copy
-                -movflags +faststart
+                -map_metadata 0
+                -movflags +faststart+use_metadata_tags
                 -y "$output_file"
             )
             ;;
     esac
+    
+    # Dry run check
+    if [[ "$dry_run" == "true" ]]; then
+        echo "${ffmpeg_cmd[@]}"
+        return 0
+    fi
     
     log_info "Processing: $(basename "$input_file") → $(basename "$output_file")"
     log_info "Duration: ${duration_int}s | Quality: $quality"
@@ -282,6 +324,8 @@ main() {
     local output_file=""
     local lut_file="$LUT_FILE"
     local quality="$QUALITY"
+    local codec="$CODEC"
+    local dry_run="false"
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -297,6 +341,14 @@ main() {
             --quality)
                 quality="$2"
                 shift 2
+                ;;
+            --codec)
+                codec="$2"
+                shift 2
+                ;;
+            --dry-run)
+                dry_run="true"
+                shift
                 ;;
             -*)
                 log_error "Unknown option: $1"
@@ -357,9 +409,11 @@ main() {
     check_dependencies
     
     # Process the video
-    if process_video "$input_file" "$output_file" "$lut_file" "$quality"; then
-        log_success "Video processing completed successfully!"
-        log_info "Output: $output_file"
+    if process_video "$input_file" "$output_file" "$lut_file" "$quality" "$codec" "$dry_run"; then
+        if [[ "$dry_run" != "true" ]]; then
+            log_success "Video processing completed successfully!"
+            log_info "Output: $output_file"
+        fi
         exit 0
     else
         log_error "Video processing failed"
